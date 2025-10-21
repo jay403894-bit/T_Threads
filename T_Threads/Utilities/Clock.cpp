@@ -1,0 +1,133 @@
+#include "Clock.h"
+// Default constructor - Starts with the clock paused
+Clock::Clock()
+    : m_start(std::chrono::steady_clock::now()),
+    m_end(m_start),
+    m_duration(0),  // Start with no accumulated duration
+    m_paused(true) { // Start in paused state
+}
+
+// Copy constructor - Keeps the clock paused
+Clock::Clock(const Clock& other)
+    : m_start(other.m_start),
+    m_end(other.m_end),
+    m_duration(other.m_duration),
+    m_paused(true) { // Copy constructor keeps the clock paused
+}
+
+// Move constructor - Keeps the clock paused after moving
+Clock::Clock(Clock&& other) noexcept
+    : m_start(std::move(other.m_start)),
+    m_end(std::move(other.m_end)),
+    m_duration(other.m_duration),
+    m_paused(true) { 
+}
+
+Clock& Clock::operator=(Clock&& other) noexcept {
+    if (this != &other) {
+        std::lock_guard<std::mutex> lock(timer_mutex);
+        m_start = std::move(other.m_start);
+        m_end = std::move(other.m_end);
+        m_duration = other.m_duration;
+        m_paused = other.m_paused;
+        other.m_duration = m_duration;
+        other.m_paused = false;
+        other.m_start = std::chrono::steady_clock::time_point();
+        other.m_end = std::chrono::steady_clock::time_point();
+    }
+    return *this;
+}
+// Copy assignment operator
+Clock& Clock::operator=(const Clock& other) {
+    if (this != &other) {
+        std::lock_guard<std::mutex> lock(timer_mutex);
+        m_start = other.m_start;
+        m_end = other.m_end;
+        m_duration = other.m_duration;
+        m_paused = other.m_paused;
+    }
+    return *this;
+}
+// Destructor
+Clock::~Clock() {}
+// Convert the current time duration to a string formatted as "HH:MM:SS.MS"
+std::string Clock::ToString() const {
+    auto ms_total = ElapsedMS();  
+
+    auto hours = ms_total / (1000 * 60 * 60);
+    auto minutes = (ms_total / (1000 * 60)) % 60;
+    auto seconds = (ms_total / 1000) % 60;
+    auto milliseconds = ms_total % 1000;
+
+    std::ostringstream ss;
+    ss << std::setw(2) << std::setfill('0') << hours << ":"
+        << std::setw(2) << std::setfill('0') << minutes << ":"
+        << std::setw(2) << std::setfill('0') << seconds << "."
+        << std::setw(3) << std::setfill('0') << milliseconds;
+
+    return ss.str();
+}
+// Stop the clock (accumulate the time)
+void Clock::Stop() {
+    std::lock_guard<std::mutex> lock(timer_mutex);
+    if (!m_paused) {
+        m_end = std::chrono::steady_clock::now();
+        auto time_elapsed = m_end - m_start;
+        m_duration += time_elapsed;
+        m_paused = true;
+    }
+}
+// Resume the clock (continue from the last Start time without resetting Start)
+void Clock::Resume() {
+    std::lock_guard<std::mutex> lock(timer_mutex);
+    if (m_paused) {
+        m_start = std::chrono::steady_clock::now() - (m_end - m_start); 
+        m_paused = false;
+    }
+}
+// Start the clock (begin measuring time)
+void Clock::Start() {
+    std::lock_guard<std::mutex> lock(timer_mutex);
+    if (m_paused) {
+        m_start = std::chrono::steady_clock::now();
+        m_end = m_start; 
+        m_paused = false;
+    }
+}
+// Reset the clock (clears the accumulated time)
+void Clock::Reset() {
+    std::lock_guard<std::mutex> lock(timer_mutex);
+    m_end = std::chrono::steady_clock::now();
+    m_start = m_end;
+    m_duration = std::chrono::steady_clock::duration::zero();
+    m_paused = true;
+}
+// Get the elapsed time in milliseconds
+long long Clock::ElapsedMS() const {
+    std::lock_guard<std::mutex> lock(timer_mutex); 
+
+    if (m_paused) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(m_duration).count();
+    }
+    else {
+        auto Now = std::chrono::steady_clock::now();
+        auto total_elapsed = m_duration + (Now - m_start);  
+        return std::chrono::duration_cast<std::chrono::milliseconds>(total_elapsed).count();
+    }
+}
+double Clock::Elapsed() const {
+    std::lock_guard<std::mutex> lock(timer_mutex);  
+
+    if (m_paused) {
+        return std::chrono::duration_cast<std::chrono::duration<double>>(m_duration).count();
+    }
+    else {
+        auto Now = std::chrono::steady_clock::now();
+        auto total_elapsed = m_duration + (Now - m_start);
+        return std::chrono::duration_cast<std::chrono::duration<double>>(total_elapsed).count();
+    }
+}
+
+std::chrono::steady_clock::time_point Clock::Now() const {
+    return std::chrono::steady_clock::now();
+}
