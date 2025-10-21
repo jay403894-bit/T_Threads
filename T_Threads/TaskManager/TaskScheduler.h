@@ -73,6 +73,8 @@ public:
     std::shared_ptr<Clock> GetClock();
 
 private:
+    //start pool
+    void StartPool();
     //worker loop
     void Worker();
     //check if any task is ready
@@ -92,7 +94,7 @@ private:
     std::mutex taskMutex; //task mutex
     std::mutex taskQueueMutex; //task queue mutex
     std::condition_variable cv; // Condition variable for thread synchronization
-    bool stopFlag = false; // stop flag 
+    std::atomic<bool> stopFlag = false; // stop flag 
     std::thread workerThread; // Worker thread
     inline static bool constructed = false; //constructed flag to ensure singleton like behavior without the pattern
 };

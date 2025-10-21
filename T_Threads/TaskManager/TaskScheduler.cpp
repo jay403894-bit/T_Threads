@@ -22,7 +22,7 @@ bool TaskScheduler::Periodic_Task::IsTimeToRun() const {
 
 // update the periodic execution time
 void TaskScheduler::Periodic_Task::UpdateExecutionTime() {
-    nextExecutionTime += interval; 
+    nextExecutionTime = clock->ElapsedMS() + interval;
 }
 
 //constructor
@@ -32,25 +32,22 @@ TaskScheduler::TaskScheduler() {
     }
     constructed = true;
     clock = std::make_shared<Clock>();
-    priorityBins.resize(static_cast<size_t>(PriorityLevel::BLOCKED) + 1);
-
-    for (size_t i = 0; i < std::thread::hardware_concurrency() - 1; ++i) { 
-        std::shared_ptr<T_Thread> new_thread = std::make_shared<T_Thread>();
-        threadPool.insert({ new_thread->GetID(), new_thread });
-    }
-
-    workerThread = std::thread(&TaskScheduler::Worker, this);
+    StartPool();
 }
 
 //destructor
 TaskScheduler::~TaskScheduler() {
-    if (stopFlag == false)
+    if (!stopFlag)
         StopAll();
     constructed = false;
 }
 
 //add a task
 void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_) {
+    if (stopFlag)
+    {
+        StartPool();
+    }
     size_t bin_index = static_cast<size_t>(task_->GetPriority());
     if (bin_index < priorityBins.size()) {
         std::lock_guard<std::mutex> lock(taskMutex);  
@@ -64,6 +61,10 @@ void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_) {
 };
 //schedule a pereiodic task
 void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval) {
+    if (stopFlag)
+    {
+        StartPool();
+    }
     std::string id = task_->GetID();
     Periodic_Task pt(task_, interval, clock);
     {
@@ -73,6 +74,10 @@ void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interva
 }
 //schedule a delayed task
 void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS) {
+    if (stopFlag)
+    {
+        StartPool();
+    }
     std::string id = task->GetID();
     Delayed_Task dt(task, delayMS, clock);
     std::lock_guard<std::mutex> lock(taskMutex);
@@ -139,6 +144,19 @@ std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> 
 }
 //return the clock
 std::shared_ptr<Clock> TaskScheduler::GetClock() { return clock; }
+
+//start pool
+void TaskScheduler::StartPool() {
+    stopFlag = false;
+    priorityBins.resize(static_cast<size_t>(PriorityLevel::BLOCKED) + 1);
+
+    for (size_t i = 0; i < std::thread::hardware_concurrency() - 1; ++i) {
+        std::shared_ptr<T_Thread> new_thread = std::make_shared<T_Thread>();
+        threadPool.insert({ new_thread->GetID(), new_thread });
+    }
+
+    workerThread = std::thread(&TaskScheduler::Worker, this);
+}
 //worker loop
 void TaskScheduler::Worker() {
     clock->Start();
