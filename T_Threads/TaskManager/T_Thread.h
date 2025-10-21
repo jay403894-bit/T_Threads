@@ -4,6 +4,12 @@
 #include <any>
 #include "Task.h"
 #include "TaskQueue.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
+//implement posix later
+#endif
+
 
 enum class MessageType {
     Pause,
@@ -40,10 +46,16 @@ public:
     bool TryReserve();
     // Release reservation (scheduler calls this if it fails to set the task)
     void ReleaseReservation();
+    //set cpu core affinity 
+#ifdef _WIN32
+    bool SetAffinity(int cpuID);
+#else
+    // Implement POSIX sched_setaffinity if cross-platform later
+#endif
 private:
+
     //t_thread pools the thread as a Worker awaiting orders
     void Worker();
-    std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>* globalPool;
     std::mutex threadMutex; //mutex to lock the thread class
     std::condition_variable cv; //condition variable to notify the Worker
     std::shared_ptr<BaseTask> task_; //pointer to the task the thread is directed to
@@ -52,4 +64,10 @@ private:
     std::any data; //thread local storage 
     std::mutex dataMutex; //mutex for thread local storage
     bool reserved_ = false; // reserved by scheduler for imminent assignment
+    std::thread::native_handle_type nativeHandle; //native thread handle
+#ifdef _WIN32
+    DWORD_PTR mask;
+#else
+    // Implement POSIX sched_setaffinity if cross-platform later
+#endif
 };

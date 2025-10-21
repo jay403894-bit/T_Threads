@@ -68,6 +68,17 @@ wait_cv_.wait(lock, [this] {
     return completed;
     });
 }
+//get core affinity
+int BaseTask::GetCoreAffinity() {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    return cpuCoreAffinity;
+}
+//set cpu core affinity
+void BaseTask::SetCoreAffinity(int cpuID)
+{
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    cpuCoreAffinity = cpuID;
+}
 //constructor
 Task::Task(std::function<void()> task_fn)
     : task_fn_(task_fn) {

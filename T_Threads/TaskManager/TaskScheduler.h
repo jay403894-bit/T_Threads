@@ -54,11 +54,11 @@ public:
     //destructor 
     ~TaskScheduler();
     //add a task_
-    void AddTask(const std::shared_ptr<BaseTask>& task_);
+    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1);
     // Add a periodic task_ that executes at fixed intervals
-    void ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval);
+    void ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1);
     //add a delayed task
-    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS);
+    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1);
     //stop all threads
     void StopAll();
     //stop a task_

@@ -43,11 +43,12 @@ TaskScheduler::~TaskScheduler() {
 }
 
 //add a task
-void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_) {
+void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
     if (stopFlag)
     {
         StartPool();
     }
+    task_->SetCoreAffinity(cpuID);
     size_t bin_index = static_cast<size_t>(task_->GetPriority());
     if (bin_index < priorityBins.size()) {
         std::lock_guard<std::mutex> lock(taskMutex);  
@@ -60,11 +61,12 @@ void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_) {
     }
 };
 //schedule a pereiodic task
-void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval) {
+void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval, int cpuID) {
     if (stopFlag)
     {
         StartPool();
     }
+    task_->SetCoreAffinity(cpuID);
     std::string id = task_->GetID();
     Periodic_Task pt(task_, interval, clock);
     {
@@ -73,13 +75,14 @@ void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interva
     }
 }
 //schedule a delayed task
-void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS) {
+void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID) {
     if (stopFlag)
     {
         StartPool();
     }
-    std::string id = task->GetID();
-    Delayed_Task dt(task, delayMS, clock);
+    task_->SetCoreAffinity(cpuID);
+    std::string id = task_->GetID();
+    Delayed_Task dt(task_, delayMS, clock);
     std::lock_guard<std::mutex> lock(taskMutex);
     delayedTasks[id] = dt;
 }

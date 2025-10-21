@@ -1,6 +1,15 @@
 #include "T_Thread.h"
 //constructor 
-T_Thread::T_Thread() : message(MessageType::Pool), t_thread(&T_Thread::Worker, this), globalPool(nullptr) {};
+T_Thread::T_Thread()
+	: message(MessageType::Pool)
+{
+	t_thread = std::thread(&T_Thread::Worker, this); // start thread
+#ifdef _WIN32
+	nativeHandle = t_thread.native_handle();          // safe now
+#else
+	//implement posix later
+#endif
+}
 
 //destructor
 T_Thread::~T_Thread() {
@@ -70,6 +79,24 @@ void T_Thread::ReleaseReservation() {
 	std::lock_guard<std::mutex> lock(threadMutex);
 	reserved_ = false;
 }
+//set cpu affinity
+#ifdef _WIN32
+bool T_Thread::SetAffinity(int cpuID)
+{
+	std::lock_guard<std::mutex> lock(threadMutex);
+	if (cpuID == -1) {
+		return true; // leave affinity unchanged
+	}
+	else if (cpuID < -1) {
+		return false;
+	}
+	mask = 1ULL << cpuID;
+	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, mask);
+	return result != 0;
+}
+#else
+ //implement posix later
+#endif
 //t_thread pools the thread as a Worker awaiting orders
 void T_Thread::Worker() {
 	while (message != MessageType::Stop) {
@@ -96,6 +123,7 @@ void T_Thread::Worker() {
 
 		if (current_task) {
 			message = MessageType::Run;
+			SetAffinity(current_task->GetCoreAffinity());
 			current_task->Execute();
 			message = MessageType::Pool;
 			current_task->SetCompleted();
