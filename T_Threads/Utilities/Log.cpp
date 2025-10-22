@@ -15,7 +15,7 @@ Log::~Log() {
     }
 }
 //log info
-void Log::LogInfo(Log_Level level, const std::string& message, std::source_location location) {
+void Log::LogInfo(Log_Level level, const std::string& tStatus, std::source_location location) {
     if (!Log::log_file_.is_open()) {
         std::cerr << "Log file not open, skipping log entry." << std::endl;
         return;
@@ -48,7 +48,7 @@ void Log::LogInfo(Log_Level level, const std::string& message, std::source_locat
             << " | " << location.file_name()
             << ":" << location.function_name()
             << ":" << location.line()
-            << " | " << message
+            << " | " << tStatus
             << std::endl;
 
         // Flush after writing to ensure it's written immediately

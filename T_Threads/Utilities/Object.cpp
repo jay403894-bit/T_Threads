@@ -1,7 +1,7 @@
 #include "Object.h"
 Object::Object() { SetID(GenerateUUID()); }
 //return the id
-std::string Object::GetID() const {
+std::string Object::GetID() {
     return objectID;
 }
 //equality operator
@@ -9,7 +9,8 @@ bool Object::operator==(const Object& other) const {
     return objectID == other.objectID;
 }
 //inequality operator
-bool Object::operator!=(const Object& other) const {
+bool Object::operator!=(const Object& other) const
+{
     return objectID != other.objectID;
 }
 //set the id

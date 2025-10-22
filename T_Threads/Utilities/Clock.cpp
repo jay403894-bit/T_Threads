@@ -39,6 +39,7 @@ Clock& Clock::operator=(Clock&& other) noexcept {
 }
 // Copy assignment operator
 Clock& Clock::operator=(const Clock& other) {
+    std::lock_guard<std::mutex> lock(timer_mutex);
     if (this != &other) {
         std::lock_guard<std::mutex> lock(timer_mutex);
         m_start = other.m_start;
@@ -129,5 +130,6 @@ double Clock::Elapsed() const {
 }
 
 std::chrono::steady_clock::time_point Clock::Now() const {
+    std::lock_guard<std::mutex> lock(timer_mutex);
     return std::chrono::steady_clock::now();
 }

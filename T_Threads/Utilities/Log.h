@@ -20,7 +20,7 @@ public:
     Log& operator=(const Log&) = delete;
     ~Log();
 
-    void LogInfo(Log_Level level, const std::string& message, std::source_location location = std::source_location::current());
+    void LogInfo(Log_Level level, const std::string& tStatus, std::source_location location = std::source_location::current());
 
 private:
 

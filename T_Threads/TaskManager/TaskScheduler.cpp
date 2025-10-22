@@ -10,7 +10,7 @@ TaskScheduler::Delayed_Task::Delayed_Task()
 }
 
 // Parameterized constructor for initializing the task_ with interval and game timer
-TaskScheduler::Periodic_Task::Periodic_Task(std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer)
+TaskScheduler::Periodic_Task::Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer)
     : task_(task_), interval(interval_), clock(timer) {
     nextExecutionTime = clock->ElapsedMS();  // Initialize to the current game time
 }
@@ -43,12 +43,15 @@ TaskScheduler::~TaskScheduler() {
 }
 
 //add a task
-void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
+void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID, bool isGroup) {
     if (stopFlag)
     {
         StartPool();
     }
-    task_->SetCoreAffinity(cpuID);
+    if (isGroup)
+        task_->SetGroupAffinity(cpuID);
+    else
+        task_->SetCoreAffinity(cpuID);
     size_t bin_index = static_cast<size_t>(task_->GetPriority());
     if (bin_index < priorityBins.size()) {
         std::lock_guard<std::mutex> lock(taskMutex);  
@@ -61,13 +64,15 @@ void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
     }
 };
 //schedule a pereiodic task
-void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval, int cpuID) {
+void TaskScheduler::ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID, bool isGroup) {
     if (stopFlag)
     {
         StartPool();
     }
-    task_->SetCoreAffinity(cpuID);
-    std::string id = task_->GetID();
+    if (isGroup)
+        task_->SetGroupAffinity(cpuID);
+    else
+        task_->SetCoreAffinity(cpuID);    std::string id = task_->GetID();
     Periodic_Task pt(task_, interval, clock);
     {
         std::lock_guard<std::mutex> lock(taskMutex);
@@ -75,12 +80,15 @@ void TaskScheduler::ScheduleTask(std::shared_ptr<BaseTask>& task_, float interva
     }
 }
 //schedule a delayed task
-void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID) {
+void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID, bool isGroup) {
     if (stopFlag)
     {
         StartPool();
     }
-    task_->SetCoreAffinity(cpuID);
+    if (isGroup)
+        task_->SetGroupAffinity(cpuID);
+    else
+        task_->SetCoreAffinity(cpuID);   
     std::string id = task_->GetID();
     Delayed_Task dt(task_, delayMS, clock);
     std::lock_guard<std::mutex> lock(taskMutex);
@@ -251,7 +259,7 @@ std::shared_ptr<BaseTask> TaskScheduler::GetNextTask() {
 //get an available thread
 std::shared_ptr<T_Thread> TaskScheduler::get_available_thread() {
     for (auto& thread : threadPool) {
-        if (thread.second->GetMessage() == MessageType::Pool) {
+        if (thread.second->GetStatus() == ThreadStatus::Pool) {
             return thread.second;
         }
     }

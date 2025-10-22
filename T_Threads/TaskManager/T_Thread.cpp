@@ -1,14 +1,40 @@
 #include "T_Thread.h"
 //constructor 
+std::unordered_map<int, std::vector<int>> T_Thread::coreGroups; // a map of core groups
+unsigned int T_Thread::numCores; // number of cores
+unsigned int T_Thread::groupSize; //core group size
+unsigned int T_Thread::numGroups; //number of groups
+bool T_Thread::firstRun = true; //first initialization flag
+
 T_Thread::T_Thread()
-	: message(MessageType::Pool)
+	: tStatus(ThreadStatus::Pool)
 {
-	t_thread = std::thread(&T_Thread::Worker, this); // start thread
-#ifdef _WIN32
-	nativeHandle = t_thread.native_handle();          // safe now
-#else
-	//implement posix later
-#endif
+	if (firstRun)
+	{
+		firstRun = false;
+		numCores = std::thread::hardware_concurrency();
+		if (numCores <= 8) {
+			groupSize = 2;
+		}
+		else if (numCores <= 16) {
+			groupSize = 4;
+		}
+		else {
+			groupSize = 8;
+		}
+		numGroups = (numCores + groupSize - 1) / groupSize;
+		coreGroups.clear();
+		for (unsigned int g = 0; g < numGroups; ++g) {
+			std::vector<int> group;
+			for (unsigned int c = g * groupSize; c < (g + 1) * groupSize && c < numCores; ++c) {
+				group.push_back(c);
+			}
+			coreGroups[g] = group; // key is group index 0..numGroups-1
+		}
+	}
+	t_thread = std::thread(&T_Thread::Worker, this);
+	nativeHandle = t_thread.native_handle();
+
 }
 
 //destructor
@@ -18,6 +44,7 @@ T_Thread::~T_Thread() {
 		t_thread.join();
 	}
 };
+
 //get the thread id
 std::thread::id T_Thread::GetID() {
 	return t_thread.get_id();
@@ -31,7 +58,7 @@ bool T_Thread::TryReserve() {
 }
 
 //set the task
-bool T_Thread::SetTask(std::shared_ptr<BaseTask>& newTask) {
+bool T_Thread::SetTask(const std::shared_ptr<BaseTask>& newTask) {
 	if (!newTask) return false;
 	{
 		std::lock_guard<std::mutex> lock(threadMutex);
@@ -40,40 +67,30 @@ bool T_Thread::SetTask(std::shared_ptr<BaseTask>& newTask) {
 		}
 		task_ = newTask;
 		reserved_ = false;
-		message = MessageType::Run;
+		tStatus = ThreadStatus::Run;
 	}
 	cv.notify_one();
 	return true;
 }
-//set the thread local storage data
-void T_Thread::SetData(std::any dataIn)
-{
-	std::lock_guard<std::mutex> lock(dataMutex);
-	data = dataIn;
-};
-//retrieve the thread local storage data 
-std::any T_Thread::GetData() {
-	std::lock_guard<std::mutex> lock(dataMutex);
-	return data;
-}
 //Stop the thread
 void T_Thread::Stop() {
 	std::lock_guard<std::mutex> lock(threadMutex);
-	message = MessageType::Stop;
+	tStatus = ThreadStatus::Stop;
 	cv.notify_one();
 };
-//return the thread's message
-MessageType T_Thread::GetMessage()
+//return the thread's tStatus
+ThreadStatus T_Thread::GetStatus()
 {
 	std::lock_guard<std::mutex> lock(threadMutex);
-	return message;
+	return tStatus;
 }
-//set the threads message
-void T_Thread::SetMessage(const MessageType& msg)
+//set the threads tStatus
+void T_Thread::SetStatus(const ThreadStatus& msg)
 {
 	std::lock_guard<std::mutex> lock(threadMutex);
-	message = msg;
-};
+	tStatus = msg;
+}
+
 //Release thread reservation
 void T_Thread::ReleaseReservation() {
 	std::lock_guard<std::mutex> lock(threadMutex);
@@ -83,7 +100,6 @@ void T_Thread::ReleaseReservation() {
 #ifdef _WIN32
 bool T_Thread::SetAffinity(int cpuID)
 {
-	std::lock_guard<std::mutex> lock(threadMutex);
 	if (cpuID == -1) {
 		return true; // leave affinity unchanged
 	}
@@ -94,20 +110,33 @@ bool T_Thread::SetAffinity(int cpuID)
 	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, mask);
 	return result != 0;
 }
+
+bool T_Thread::SetGroupAffinity(int groupID) {
+	auto it = coreGroups.find(groupID);
+	if (it == coreGroups.end()) return false;
+
+	DWORD_PTR groupMask = 0;
+	for (int cpuID : it->second) {
+		groupMask |= 1ULL << cpuID;
+	}
+
+	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, groupMask);
+	return result != 0;
+}
 #else
  //implement posix later
 #endif
 //t_thread pools the thread as a Worker awaiting orders
 void T_Thread::Worker() {
-	while (message != MessageType::Stop) {
+	while (tStatus != ThreadStatus::Stop) {
 		std::shared_ptr<BaseTask> current_task;
 		{
-			std::unique_lock<std::mutex> lock(threadMutex);
+			std::unique_lock<std::mutex> lock(workerMutex);
 			cv.wait(lock, [this]() { return task_ != nullptr ||
 				!taskQueue.empty() ||
-				message == MessageType::Stop; });
+				tStatus == ThreadStatus::Stop; });
 
-			if (message == MessageType::Stop) break;
+			if (tStatus == ThreadStatus::Stop) break;
 
 			if (task_) {
 				current_task = task_;
@@ -122,10 +151,14 @@ void T_Thread::Worker() {
 		}
 
 		if (current_task) {
-			message = MessageType::Run;
-			SetAffinity(current_task->GetCoreAffinity());
+			tStatus = ThreadStatus::Run;
+			int groupAffinity = current_task->GetGroupAffinity();
+			if (groupAffinity > -1)
+				SetGroupAffinity(groupAffinity);
+			else
+				SetAffinity(current_task->GetCoreAffinity());
 			current_task->Execute();
-			message = MessageType::Pool;
+			tStatus = ThreadStatus::Pool;
 			current_task->SetCompleted();
 		}
 	}

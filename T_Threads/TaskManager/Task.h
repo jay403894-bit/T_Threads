@@ -42,6 +42,8 @@ public:
     void WaitUntilComplete(); //wait until complete
     int GetCoreAffinity(); //get core affinity
     void SetCoreAffinity(int cpuID); //set the task core affinity
+    int GetGroupAffinity(); //get group affinity 
+    void SetGroupAffinity(int groupID); //set group affinity
 protected:
     PriorityLevel priority_ = PriorityLevel::NORMAL; //the priority level of the task_
     bool completed = false; //flag for whether the taks is completed
@@ -53,7 +55,7 @@ protected:
     std::vector <std::weak_ptr<BaseTask>> dependencies; //tasks this task is dependent on
     std::atomic<bool> taken{ false }; //taken flag/token
     int cpuCoreAffinity = -1; //the cpu core affinity, default any core
-
+    int coreGroupAffinity = -1; // the core group affinity
 };
 
 

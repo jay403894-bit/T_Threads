@@ -78,6 +78,18 @@ void BaseTask::SetCoreAffinity(int cpuID)
 {
     std::lock_guard<std::mutex> lock(task_mutex_);
     cpuCoreAffinity = cpuID;
+    coreGroupAffinity = -1;
+}
+//get core group affinity
+int BaseTask::GetGroupAffinity() {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    return coreGroupAffinity;
+}
+//set core group affinity
+void BaseTask::SetGroupAffinity(int groupID) {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    coreGroupAffinity = groupID;
+    cpuCoreAffinity = -1;
 }
 //constructor
 Task::Task(std::function<void()> task_fn)

@@ -23,7 +23,7 @@ public:
         // Default constructor
         Periodic_Task();
         // Parameterized constructor for initializing the task_ with interval and game timer
-        Periodic_Task(std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer);
+        Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer);
         // Check if it's time to run the task_ based on TotalTime and interval
         bool IsTimeToRun() const;
         // Update the next execution time
@@ -54,11 +54,11 @@ public:
     //destructor 
     ~TaskScheduler();
     //add a task_
-    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1);
+    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1, bool isGroup = false);
     // Add a periodic task_ that executes at fixed intervals
-    void ScheduleTask(std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1);
+    void ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1, bool isGroup = false);
     //add a delayed task
-    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1);
+    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1, bool isGroup = false);
     //stop all threads
     void StopAll();
     //stop a task_

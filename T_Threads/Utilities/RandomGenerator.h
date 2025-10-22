@@ -1,5 +1,5 @@
 #include <random>
-
+#include <mutex>
 class RandomGenerator{
 public:
     static RandomGenerator& Get() {
@@ -12,9 +12,11 @@ public:
     ~RandomGenerator() = default;
 
     int GenerateInt(int min, int max);
+    float GenerateFloat(float min, float max);
     double GenerateDouble(double min, double max);
   
 
 private:
     std::default_random_engine engine;
+    std::mutex rngMutex;
 };

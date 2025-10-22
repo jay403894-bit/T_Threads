@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <sstream>
 #include <random>
+#include <mutex>
 //Object generates a UUID tag for an object
 class Object {
 public:
@@ -13,7 +14,7 @@ public:
     //destructor 
     virtual ~Object() = default;
     //return the id as type uuid
-    virtual std::string GetID() const;
+    virtual std::string GetID();
     //equality/inequality check on ids
     bool operator==(const Object& other) const;
     bool operator!=(const Object& other) const;
