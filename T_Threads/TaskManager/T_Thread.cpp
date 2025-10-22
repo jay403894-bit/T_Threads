@@ -8,6 +8,7 @@ unsigned int T_Thread::numCores; // number of cores
 unsigned int T_Thread::groupSize; //core group size
 unsigned int T_Thread::numGroups; //number of groups
 bool T_Thread::firstRun = true; //first initialization flag
+bool T_Thread::taskHasRun = false; //taskhasrun flag
 
 //constructor
 T_Thread::T_Thread()
@@ -100,9 +101,11 @@ void T_Thread::ReleaseReservation() {
 	reserved_ = false;
 }
 //set group size
-void T_Thread::SetGroupSize(unsigned int size) {
+//SETGROUPSIZE MUST 
+bool T_Thread::SetGroupSize(unsigned int size) {
 	std::lock_guard<std::mutex> lock(affinityMutex); // or a static init lock
-	if (size == 0 || size > numCores - 1) return;   // sanitize input
+	if (size == 0 || size > numCores - 1 || taskHasRun) return false;   // sanitize input
+
 	groupSize = size;
 	numGroups = (numCores + groupSize - 1) / groupSize;
 
@@ -114,6 +117,7 @@ void T_Thread::SetGroupSize(unsigned int size) {
 		}
 		coreGroups[g] = group;
 	}
+	return true;
 }
 //set cpu affinity
 #ifdef _WIN32
@@ -232,7 +236,8 @@ void T_Thread::Worker() {
 						attempts = 0; // reset
 					}
 				}
-			current_task->Execute();
+			taskHasRun = true;
+			current_task->Execute();                                                                                              
 			tStatus = ThreadStatus::Pool;
 			current_task->SetCompleted();
 			{

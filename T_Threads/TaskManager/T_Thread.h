@@ -48,7 +48,7 @@ public:
     // Release reservation (scheduler calls this if it fails to set the task)
     void ReleaseReservation();
     //manually set the group size
-    void SetGroupSize(unsigned int size);
+    bool SetGroupSize(unsigned int size);
 private:
 #ifdef _WIN32
     //set cpu core affinity (singular)
@@ -83,4 +83,5 @@ private:
     static unsigned int groupSize; //core group size
     static unsigned int numGroups; //number of groups
     static bool firstRun; //flag for first initialization of statics
+    static bool taskHasRun; // task has run flag for setgroupsize
 };

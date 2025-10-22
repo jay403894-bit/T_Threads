@@ -72,7 +72,7 @@ public:
     //get the clock
     std::shared_ptr<Clock> GetClock();
     //set the group size
-    void SetGroupSize(unsigned int size);
+    bool SetGroupSize(unsigned int size);
 private:
     //start pool
     void StartPool();

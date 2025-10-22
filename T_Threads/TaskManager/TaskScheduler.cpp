@@ -157,9 +157,9 @@ std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> 
 std::shared_ptr<Clock> TaskScheduler::GetClock() { return clock; }
 
 //Set group size manually
-void TaskScheduler::SetGroupSize(unsigned int size)
+bool TaskScheduler::SetGroupSize(unsigned int size)
 {
-    threadPtr->SetGroupSize(size);
+    return threadPtr->SetGroupSize(size);
 }
 
 //start pool
