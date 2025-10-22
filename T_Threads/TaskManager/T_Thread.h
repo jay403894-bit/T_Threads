@@ -1,3 +1,4 @@
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include <thread>
@@ -60,6 +61,7 @@ private:
     std::mutex threadMutex; //mutex to lock the thread class
     std::mutex workerMutex; //worker mutex for cv
     std::condition_variable cv; //condition variable to notify the Worker
+    std::condition_variable cvAffinity;
     std::shared_ptr<BaseTask> task_; //pointer to the task the thread is directed to
     ThreadStatus tStatus; //the threads tStatus as pooling, running, or stopping
     std::thread t_thread; //the thread
@@ -72,6 +74,9 @@ private:
 #endif
     bool group = false;
     static std::unordered_map<int, std::vector<int>> coreGroups; // a map of core groups
+    static std::vector<int> coreOccupied;
+    static std::vector<int> groupOccupancy;
+    static std::mutex affinityMutex;
     static unsigned int numCores; // number of cores
     static unsigned int groupSize; //core group size
     static unsigned int numGroups; //number of groups

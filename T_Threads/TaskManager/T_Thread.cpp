@@ -1,6 +1,9 @@
 #include "T_Thread.h"
 //constructor 
 std::unordered_map<int, std::vector<int>> T_Thread::coreGroups; // a map of core groups
+std::vector<int> T_Thread::coreOccupied;
+std::vector<int> T_Thread::groupOccupancy;
+std::mutex T_Thread::affinityMutex;
 unsigned int T_Thread::numCores; // number of cores
 unsigned int T_Thread::groupSize; //core group size
 unsigned int T_Thread::numGroups; //number of groups
@@ -9,28 +12,27 @@ bool T_Thread::firstRun = true; //first initialization flag
 T_Thread::T_Thread()
 	: tStatus(ThreadStatus::Pool)
 {
-	if (firstRun)
-	{
+	if (firstRun) {
 		firstRun = false;
 		numCores = std::thread::hardware_concurrency();
-		if (numCores <= 8) {
-			groupSize = 2;
-		}
-		else if (numCores <= 16) {
-			groupSize = 4;
-		}
-		else {
-			groupSize = 8;
-		}
+		groupSize = (numCores <= 8) ? 2 : (numCores <= 16 ? 4 : 8);
 		numGroups = (numCores + groupSize - 1) / groupSize;
+
 		coreGroups.clear();
 		for (unsigned int g = 0; g < numGroups; ++g) {
 			std::vector<int> group;
 			for (unsigned int c = g * groupSize; c < (g + 1) * groupSize && c < numCores; ++c) {
 				group.push_back(c);
 			}
-			coreGroups[g] = group; // key is group index 0..numGroups-1
+			coreGroups[g] = group;
 		}
+
+		// occupancy
+		coreOccupied.clear();
+		coreOccupied.assign(numCores, 0);        // 0 == free, 1 == occupied
+
+		groupOccupancy.clear();
+		groupOccupancy.assign(numGroups, 0);     // occupancy count per group
 	}
 	t_thread = std::thread(&T_Thread::Worker, this);
 	nativeHandle = t_thread.native_handle();
@@ -100,28 +102,66 @@ void T_Thread::ReleaseReservation() {
 #ifdef _WIN32
 bool T_Thread::SetAffinity(int cpuID)
 {
-	if (cpuID == -1) {
-		return true; // leave affinity unchanged
-	}
-	else if (cpuID < -1) {
+	if (cpuID == -1)
+		return true;
+	if (cpuID < 0 || cpuID >= static_cast<int>(numCores))
+		return false;
+
+	std::lock_guard<std::mutex> guard(affinityMutex);
+
+	if (coreOccupied[cpuID] != 0) {
+		// already occupied
 		return false;
 	}
+
+	// mark as occupied
+	coreOccupied[cpuID] = 1;
+
 	mask = 1ULL << cpuID;
 	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, mask);
-	return result != 0;
+	if (result != 0) {
+		return true;
+	}
+
+	// failed to set OS affinity — revert
+	coreOccupied[cpuID] = 0;
+	return false;
 }
 
-bool T_Thread::SetGroupAffinity(int groupID) {
+bool T_Thread::SetGroupAffinity(int groupID)
+{
 	auto it = coreGroups.find(groupID);
 	if (it == coreGroups.end()) return false;
 
+	std::lock_guard<std::mutex> guard(affinityMutex);
+
+	if (groupOccupancy[groupID] >= static_cast<int>(it->second.size()))
+		return false;
+
 	DWORD_PTR groupMask = 0;
+	std::vector<int> claimed; claimed.reserve(it->second.size());
 	for (int cpuID : it->second) {
-		groupMask |= 1ULL << cpuID;
+		if (coreOccupied[cpuID] == 0) {
+			coreOccupied[cpuID] = 1;
+			claimed.push_back(cpuID);
+			groupMask |= (1ULL << cpuID);
+		}
+	}
+
+	if (groupMask == 0) {
+		// couldn't claim any core
+		return false;
 	}
 
 	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, groupMask);
-	return result != 0;
+	if (result != 0) {
+		groupOccupancy[groupID] += 1;
+		return true;
+	}
+
+	// OS call failed, rollback claimed cores:
+	for (int cpuID : claimed) coreOccupied[cpuID] = 0;
+	return false;
 }
 #else
  //implement posix later
@@ -153,13 +193,48 @@ void T_Thread::Worker() {
 		if (current_task) {
 			tStatus = ThreadStatus::Run;
 			int groupAffinity = current_task->GetGroupAffinity();
+			int attempts = 0;
 			if (groupAffinity > -1)
-				SetGroupAffinity(groupAffinity);
+				while (!SetGroupAffinity(groupAffinity)) {
+					if (++attempts < 5) {
+						std::this_thread::yield(); // quick retry
+					}
+					else {
+						std::this_thread::sleep_for(std::chrono::milliseconds(5));
+						attempts = 0; // reset
+					}
+				}
 			else
-				SetAffinity(current_task->GetCoreAffinity());
+				while (!SetAffinity(current_task->GetCoreAffinity()))
+				{
+					if (++attempts < 5) {
+						std::this_thread::yield(); // quick retry
+					}
+					else {
+						std::this_thread::sleep_for(std::chrono::milliseconds(5));
+						attempts = 0; // reset
+					}
+				}
 			current_task->Execute();
 			tStatus = ThreadStatus::Pool;
 			current_task->SetCompleted();
+			{
+				std::lock_guard<std::mutex> guard(affinityMutex);
+				if (current_task->GetGroupAffinity() > -1) {
+					int groupID = current_task->GetGroupAffinity();
+					if (groupID >= 0 && groupID < (int)groupOccupancy.size())
+						groupOccupancy[groupID] -= 1;
+					for (int cpuID : coreGroups[groupID]) {
+						if (cpuID >= 0 && cpuID < (int)coreOccupied.size())
+							coreOccupied[cpuID] = 0;
+					}
+				}
+				else if (current_task->GetCoreAffinity() > -1) {
+					int cpuID = current_task->GetCoreAffinity();
+					if (cpuID >= 0 && cpuID < (int)coreOccupied.size())
+						coreOccupied[cpuID] = 0;
+				}
+			}
 		}
 	}
 }
