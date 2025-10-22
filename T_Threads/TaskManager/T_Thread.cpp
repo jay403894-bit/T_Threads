@@ -1,20 +1,21 @@
 #include "T_Thread.h"
 //constructor 
 std::unordered_map<int, std::vector<int>> T_Thread::coreGroups; // a map of core groups
-std::vector<int> T_Thread::coreOccupied;
-std::vector<int> T_Thread::groupOccupancy;
-std::mutex T_Thread::affinityMutex;
+std::vector<int> T_Thread::coreOccupied; //vector representing core occupancy
+std::vector<int> T_Thread::groupOccupancy; //vector representing core group occupancy
+std::mutex T_Thread::affinityMutex; //core affinity mutex
 unsigned int T_Thread::numCores; // number of cores
 unsigned int T_Thread::groupSize; //core group size
 unsigned int T_Thread::numGroups; //number of groups
 bool T_Thread::firstRun = true; //first initialization flag
 
+//constructor
 T_Thread::T_Thread()
 	: tStatus(ThreadStatus::Pool)
 {
 	if (firstRun) {
 		firstRun = false;
-		numCores = std::thread::hardware_concurrency();
+		numCores = std::thread::hardware_concurrency()-1;
 		groupSize = (numCores <= 8) ? 2 : (numCores <= 16 ? 4 : 8);
 		numGroups = (numCores + groupSize - 1) / groupSize;
 
@@ -127,7 +128,7 @@ bool T_Thread::SetAffinity(int cpuID)
 	coreOccupied[cpuID] = 0;
 	return false;
 }
-
+//set group affinity
 bool T_Thread::SetGroupAffinity(int groupID)
 {
 	auto it = coreGroups.find(groupID);

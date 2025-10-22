@@ -23,7 +23,7 @@ public:
         // Default constructor
         Periodic_Task();
         // Parameterized constructor for initializing the task_ with interval and game timer
-        Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer);
+        Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_,const std::shared_ptr<Clock>& timer);
         // Check if it's time to run the task_ based on TotalTime and interval
         bool IsTimeToRun() const;
         // Update the next execution time
@@ -38,7 +38,7 @@ public:
         //default constructor
         Delayed_Task();
         // Constructor for a delayed / one-shot task
-        Delayed_Task(const std::shared_ptr<BaseTask>& task, float delayMS, std::shared_ptr<Clock>& timer)
+        Delayed_Task(const std::shared_ptr<BaseTask>& task, float delayMS,const std::shared_ptr<Clock>& timer)
             : task_(task), clock(timer) {
             scheduledTime = clock->ElapsedMS() + delayMS; 
         }

@@ -10,7 +10,7 @@ TaskScheduler::Delayed_Task::Delayed_Task()
 }
 
 // Parameterized constructor for initializing the task_ with interval and game timer
-TaskScheduler::Periodic_Task::Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_, std::shared_ptr<Clock>& timer)
+TaskScheduler::Periodic_Task::Periodic_Task(const std::shared_ptr<BaseTask>& task_, float interval_,const std::shared_ptr<Clock>& timer)
     : task_(task_), interval(interval_), clock(timer) {
     nextExecutionTime = clock->ElapsedMS();  // Initialize to the current game time
 }
