@@ -99,6 +99,22 @@ void T_Thread::ReleaseReservation() {
 	std::lock_guard<std::mutex> lock(threadMutex);
 	reserved_ = false;
 }
+//set group size
+void T_Thread::SetGroupSize(unsigned int size) {
+	std::lock_guard<std::mutex> lock(affinityMutex); // or a static init lock
+	if (size == 0 || size > numCores - 1) return;   // sanitize input
+	groupSize = size;
+	numGroups = (numCores + groupSize - 1) / groupSize;
+
+	coreGroups.clear();
+	for (unsigned int g = 0; g < numGroups; ++g) {
+		std::vector<int> group;
+		for (unsigned int c = g * groupSize; c < (g + 1) * groupSize && c < numCores; ++c) {
+			group.push_back(c);
+		}
+		coreGroups[g] = group;
+	}
+}
 //set cpu affinity
 #ifdef _WIN32
 bool T_Thread::SetAffinity(int cpuID)

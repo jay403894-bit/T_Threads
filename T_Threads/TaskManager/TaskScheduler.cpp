@@ -156,16 +156,24 @@ std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> 
 //return the clock
 std::shared_ptr<Clock> TaskScheduler::GetClock() { return clock; }
 
+//Set group size manually
+void TaskScheduler::SetGroupSize(unsigned int size)
+{
+    threadPtr->SetGroupSize(size);
+}
+
 //start pool
 void TaskScheduler::StartPool() {
     stopFlag = false;
     priorityBins.resize(static_cast<size_t>(PriorityLevel::BLOCKED) + 1);
-
+    std::shared_ptr<T_Thread> new_thread;
     for (size_t i = 0; i < std::thread::hardware_concurrency() - 1; ++i) {
-        std::shared_ptr<T_Thread> new_thread = std::make_shared<T_Thread>();
+      
+        new_thread = std::make_shared<T_Thread>();
         threadPool.insert({ new_thread->GetID(), new_thread });
     }
-
+    if (!threadPtr)
+        threadPtr = new_thread;
     workerThread = std::thread(&TaskScheduler::Worker, this);
 }
 //worker loop

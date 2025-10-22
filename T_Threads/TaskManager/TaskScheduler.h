@@ -71,7 +71,8 @@ public:
     std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> GetThreadMap();
     //get the clock
     std::shared_ptr<Clock> GetClock();
-
+    //set the group size
+    void SetGroupSize(unsigned int size);
 private:
     //start pool
     void StartPool();
@@ -90,6 +91,7 @@ private:
     std::unordered_map<std::string, Delayed_Task> delayedTasks; //delayed tasks mapped
     std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>> threadPool; //the thread pool mapped
     std::shared_ptr<Clock> clock;  // Add clock to track time
+    std::shared_ptr<T_Thread> threadPtr = nullptr; //pointer to a t_thread
     std::vector<std::list<std::shared_ptr<BaseTask>>> priorityBins;  // priority bins of tasks
     std::mutex taskMutex; //task mutex
     std::mutex taskQueueMutex; //task queue mutex

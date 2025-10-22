@@ -47,6 +47,8 @@ public:
     bool TryReserve();
     // Release reservation (scheduler calls this if it fails to set the task)
     void ReleaseReservation();
+    //manually set the group size
+    void SetGroupSize(unsigned int size);
 private:
 #ifdef _WIN32
     //set cpu core affinity (singular)
