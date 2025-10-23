@@ -24,6 +24,17 @@ public:
             listeners.emplace_back(std::move(listener));  // Add the listener to the list
         }
     }
+    //unsubscribe a listener from the event
+    void unsubscribe(const std::shared_ptr<Listener>& listener) {
+        std::lock_guard<std::mutex> lock(listenersMutex);
+        listeners.erase(
+            std::remove_if(
+                listeners.begin(), listeners.end(),
+                [&](const std::shared_ptr<Listener>& l) {
+                    return l == listener;
+                }),
+            listeners.end());
+    }
     // Set a callback to be triggered when the event is notified
     void set_callback(std::function<void()> callback) {
         {

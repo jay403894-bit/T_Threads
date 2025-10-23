@@ -1,7 +1,6 @@
 #pragma once
 #include <functional>
-#include "../Utilities/Logger.h"
-#include "../Utilities/Object.h"
+#include "../Utilities/UniqueID.h"
 
 
 enum class PriorityLevel {
@@ -19,7 +18,7 @@ enum class PriorityLevel {
 /// <BaseTask>
 ///  BaseTask is a partial virtual base class of a Task
 /// </BaseTask>
-class BaseTask : public Object {
+class BaseTask : public UniqueID {
 public:
 
     BaseTask() = default; //constructor
@@ -75,4 +74,9 @@ public:
 protected:
     std::function<void()> task_fn_; //the tasks related function
 
+};
+
+struct SequencedTask {
+    std::shared_ptr<BaseTask> task;
+    uint64_t sequence;
 };

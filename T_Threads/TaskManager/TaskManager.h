@@ -1,7 +1,7 @@
 #pragma once
 #include <mutex>
 #include "TaskScheduler.h"
-
+#include "MPSCQueue.h"
 
 class TaskManager {
 public:
@@ -14,14 +14,12 @@ public:
 
     // Singleton accessor can also potentially access the global clock if needed
     static std::shared_ptr<TaskScheduler> Get();
-    static std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>>GetThreadMap();
-    static std::shared_ptr<Clock> GetClock();
     static void EnqueueToMain(const std::shared_ptr<BaseTask>& task);
     static void ProcessMainThreadTasks();
 
 private:
-    static std::mutex mutex;
-    static std::queue<std::shared_ptr<BaseTask>> mainThreadQueue;
-    static std::mutex mainQueueMutex;
-    static std::shared_ptr<TaskScheduler> task_scheduler_;  // The singleton TaskScheduler instance
+    static inline std::mutex mutex;
+    static inline MPSCQueue<std::shared_ptr<BaseTask>> mainThreadQueue;
+    static inline std::mutex mainQueueMutex;
+    static inline std::shared_ptr<TaskScheduler> task_scheduler_ = nullptr;  // The singleton TaskScheduler instance
 };

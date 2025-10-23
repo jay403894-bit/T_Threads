@@ -1,10 +1,11 @@
 #pragma once
+#define NOMINMAX
 #include <list>
 #include <thread>
 #include <condition_variable>
 #include <vector>
 #include <mutex>
-#include "../Utilities/Logger.h"
+#include <algorithm>
 #include "T_Thread.h"
 #include "TaskQueue.h"
 #include "Task.h"
@@ -54,49 +55,47 @@ public:
     //destructor 
     ~TaskScheduler();
     //add a task_
-    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1, bool isGroup = false);
+    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1);
     // Add a periodic task_ that executes at fixed intervals
-    void ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1, bool isGroup = false);
+    void ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1);
     //add a delayed task
-    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1, bool isGroup = false);
-    //stop all threads
-    void StopAll();
+    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1);
+    //stop all threads and join the pool
+    void Join();
     //stop a task_
     void StopTask(const std::string& id);
     //pause a task_
     void PauseTask(std::string id);
     //Resume a task_
     void ResumeTask(std::string id);
-    //return a pointer to the system scheduler clock to use for timings
-    std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> GetThreadMap();
     //get the clock
-    std::shared_ptr<Clock> GetClock();
-    //set the group size
-    bool SetGroupSize(unsigned int size);
+    std::string TimeStamp();
+    //start the thread pool
+    void StartPool(unsigned int numWorkers=0);
 private:
-    //start pool
-    void StartPool();
+    int PickWorkerForTask(const std::shared_ptr<BaseTask>& task); // Choose queue index
     //worker loop
     void Worker();
     //check if any task is ready
     bool AnyTaskReady();
-    //check if all queues are empty
-    bool AllQueuesEmpty();
     //get the next task
     std::shared_ptr<BaseTask> GetNextTask();
-    //return a thread thats pooling available for a task_
-    std::shared_ptr<T_Thread> get_available_thread();
+    std::atomic<int> nextWorker{ 0 }; // for round-robin
+    std::vector<std::shared_ptr<T_Thread>> workers; // indexable
 
     std::unordered_map<std::string, Periodic_Task> scheduledTasks; //scheduled tasks mapped
     std::unordered_map<std::string, Delayed_Task> delayedTasks; //delayed tasks mapped
-    std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>> threadPool; //the thread pool mapped
     std::shared_ptr<Clock> clock;  // Add clock to track time
-    std::shared_ptr<T_Thread> threadPtr = nullptr; //pointer to a t_thread
     std::vector<std::list<std::shared_ptr<BaseTask>>> priorityBins;  // priority bins of tasks
     std::mutex taskMutex; //task mutex
-    std::mutex taskQueueMutex; //task queue mutex
     std::condition_variable cv; // Condition variable for thread synchronization
     std::atomic<bool> stopFlag = false; // stop flag 
     std::thread workerThread; // Worker thread
     inline static bool constructed = false; //constructed flag to ensure singleton like behavior without the pattern
+
+    std::vector<int> coreOccupied;
+    std::mutex workerMutex;
+    unsigned int numCores = 0;
+    std::atomic<int> nextIndex{ -1 };
+    std::queue<std::shared_ptr<BaseTask>> fallbackQueue;
 };

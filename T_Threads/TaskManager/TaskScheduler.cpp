@@ -38,41 +38,33 @@ TaskScheduler::TaskScheduler() {
 //destructor
 TaskScheduler::~TaskScheduler() {
     if (!stopFlag)
-        StopAll();
-    constructed = false;
+        Join();
 }
 
 //add a task
-void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID, bool isGroup) {
+void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
     if (stopFlag)
     {
         StartPool();
+        stopFlag = false;
     }
-    if (isGroup)
-        task_->SetGroupAffinity(cpuID);
-    else
-        task_->SetCoreAffinity(cpuID);
+    task_->SetCoreAffinity(cpuID);
     size_t bin_index = static_cast<size_t>(task_->GetPriority());
     if (bin_index < priorityBins.size()) {
         std::lock_guard<std::mutex> lock(taskMutex);  
         priorityBins[bin_index].push_back(task_);
-        Logger::Get()->LogInfo(Log_Level::Info, "Task added to bin: ");
         cv.notify_one(); 
     }
-    else {
-        Logger::Get()->LogInfo(Log_Level::Error, "Invalid priority level!");
-    }
+
 };
 //schedule a pereiodic task
-void TaskScheduler::ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID, bool isGroup) {
+void TaskScheduler::ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID) {
     if (stopFlag)
     {
         StartPool();
+        stopFlag = false;
     }
-    if (isGroup)
-        task_->SetGroupAffinity(cpuID);
-    else
-        task_->SetCoreAffinity(cpuID);    std::string id = task_->GetID();
+    task_->SetCoreAffinity(cpuID);    std::string id = task_->GetID();
     Periodic_Task pt(task_, interval, clock);
     {
         std::lock_guard<std::mutex> lock(taskMutex);
@@ -80,47 +72,53 @@ void TaskScheduler::ScheduleTask(const std::shared_ptr<BaseTask>& task_, float i
     }
 }
 //schedule a delayed task
-void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID, bool isGroup) {
+void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID) {
     if (stopFlag)
     {
         StartPool();
+        stopFlag = false;
     }
-    if (isGroup)
-        task_->SetGroupAffinity(cpuID);
-    else
-        task_->SetCoreAffinity(cpuID);   
+    task_->SetCoreAffinity(cpuID);   
     std::string id = task_->GetID();
     Delayed_Task dt(task_, delayMS, clock);
     std::lock_guard<std::mutex> lock(taskMutex);
     delayedTasks[id] = dt;
 }
 //stop all tasks and threads
-void TaskScheduler::StopAll() {
+void TaskScheduler::Join() {
+    // Signal shutdown
     stopFlag = true;
-    cv.notify_all();
+    cv.notify_all(); // wake scheduler thread
+
+    // Cancel scheduled tasks
     {
         std::lock_guard<std::mutex> lock(taskMutex);
         for (auto& t : scheduledTasks) {
             t.second.cancelled = true;
         }
     }
-    for (auto& thread : threadPool) {
-        thread.second->Stop();
+
+    //join all workers 
+    for (auto& worker : workers) {
+        worker->Join(); // blocks until each worker finishes
     }
+
+    // Join scheduler thread (bootstrap)
+    if (workerThread.joinable()) {
+        workerThread.join();
+    }
+
+    // Clear tasks and containers
     {
         std::lock_guard<std::mutex> lock(taskMutex);
+        scheduledTasks.clear();
+        delayedTasks.clear();
         for (auto& bin : priorityBins) {
-            std::list<std::shared_ptr<BaseTask>> empty;
-            std::swap(bin, empty); 
+            bin.clear();
         }
-        scheduledTasks.clear(); 
     }
-    if (workerThread.joinable()) {
-        workerThread.join(); 
-    }
-    threadPool.clear();
-    priorityBins.clear(); 
-    Logger::Get()->LogInfo(Log_Level::Info, "All tasks and threads have been cleared.");
+
+    workers.clear();
 }
 //stop a task_
 void TaskScheduler::StopTask(const std::string& id) {
@@ -134,9 +132,6 @@ void TaskScheduler::PauseTask(std::string id) {
     if (it != scheduledTasks.end()) {
         it->second.task_->PauseTask();
     }
-    else {
-        Logger::Get()->LogInfo(Log_Level::Warning, "Pause failed: task not found with id: " + id);
-    }
 }
 //resume a task
 void TaskScheduler::ResumeTask(std::string id) {
@@ -145,133 +140,195 @@ void TaskScheduler::ResumeTask(std::string id) {
     if (it != scheduledTasks.end()) {
         it->second.task_->ResumeTask();
     }
-    else {
-        Logger::Get()->LogInfo(Log_Level::Warning, "Resume failed: task not found with id: " + id);
-    }
 }
-//return the threadmap so the user side code can retrieve T_Thread data by thread id
-std::shared_ptr<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>> TaskScheduler::GetThreadMap() {
-    return std::make_shared<std::unordered_map<std::thread::id, std::shared_ptr<T_Thread>>>(threadPool);
-}
-//return the clock
-std::shared_ptr<Clock> TaskScheduler::GetClock() { return clock; }
+//return a timestamp in ms
+std::string TaskScheduler::TimeStamp() { return clock->ToString(); }
 
-//Set group size manually
-bool TaskScheduler::SetGroupSize(unsigned int size)
-{
-    return threadPtr->SetGroupSize(size);
-}
-
-//start pool
-void TaskScheduler::StartPool() {
-    stopFlag = false;
+void TaskScheduler::StartPool(unsigned int numWorkers) {
+    if (constructed == false) { /* already handled in ctor, but be defensive */ }
     priorityBins.resize(static_cast<size_t>(PriorityLevel::BLOCKED) + 1);
-    std::shared_ptr<T_Thread> new_thread;
-    for (size_t i = 0; i < std::thread::hardware_concurrency() - 1; ++i) {
-      
-        new_thread = std::make_shared<T_Thread>();
-        threadPool.insert({ new_thread->GetID(), new_thread });
+
+    // determine a default numWorkers if caller passed 0
+    unsigned int hw = std::thread::hardware_concurrency();
+    if (hw == 0) hw = 4;
+    if (numWorkers == 0) numWorkers = std::max(2u, hw - 2u); // keep two cores for main and scheduler
+    // Preallocate
+    workers.clear();
+    queues.clear();
+    workers.reserve(numWorkers);
+    queues.reserve(numWorkers);
+
+    // occupancy
+    coreOccupied.clear();
+    coreOccupied.assign(numWorkers, 0);        // 0 == free, 1 == occupied
+
+
+    for (unsigned int i = 0; i < numWorkers; ++i) {
+        // create queue and worker
+        queues.push_back(std::make_unique<ChaseLevDeque<std::shared_ptr<BaseTask>>>());
+
+        auto worker = std::make_shared<T_Thread>();
+        worker->SetAffinity(i + 2, coreOccupied, numWorkers);
+        worker->SetQueueIndex(i);
+        workers.push_back(worker);
+        worker->StartWorker(i + 2);
     }
-    if (!threadPtr)
-        threadPtr = new_thread;
-    workerThread = std::thread(&TaskScheduler::Worker, this);
+    //bootstrap scheduler
+    // use a shared atomic so the lambda can safely observe the ready flag
+    auto ready = std::make_shared<std::atomic<bool>>(false);
+
+    // store the thread in the member so its destructor won't call std::terminate
+    workerThread = std::thread([this, ready]() { // <-- capture by value
+        while (!ready->load(std::memory_order_acquire)) std::this_thread::yield();
+        this->Worker();
+        });
+
+    // set affinity for the scheduler thread
+#ifdef _WIN32
+    DWORD_PTR mask = 1ULL << 1;
+    SetThreadAffinityMask(workerThread.native_handle(), mask);
+#endif
+
+    // signal the thread it can start
+    ready->store(true, std::memory_order_release);
+    constructed = true;
+}
+
+int TaskScheduler::PickWorkerForTask(const std::shared_ptr<BaseTask>& task) {
+    std::lock_guard<std::mutex> lock(taskMutex);
+    // Use core affinity if available
+    if (task->GetCoreAffinity() >= 2) {
+        return (task->GetCoreAffinity()-2) % workers.size();
+    }
+    // Otherwise round-robin over all workers
+    return nextWorker.fetch_add(1) % workers.size();
 }
 //worker loop
 void TaskScheduler::Worker() {
-    clock->Start();
-
+    clock->Reset();
+    int startIdx;
+    int workerIndex;
+    bool assigned;
     while (!stopFlag) {
         std::shared_ptr<BaseTask> task = GetNextTask();
-
         if (!task) {
-            std::unique_lock<std::mutex> lock(taskMutex);
+            std::unique_lock<std::mutex> lock(workerMutex);
             cv.wait(lock, [this]() { return stopFlag || AnyTaskReady(); });
             continue;
         }
-
-        auto thread = get_available_thread(); 
-        if (thread) {
-            if (!thread->TryReserve()) {
-                taskQueue.push(task);
+        startIdx = nextWorker.fetch_add(1) % queues.size();
+        workerIndex = startIdx;
+        assigned = false;
+        do {
+            if (queues[workerIndex]->push_bottom(task)) {
+                assigned = true;
+                break;
             }
-            else {
-                bool ok = thread->SetTask(task); 
-                if (!ok) {
-                    thread->ReleaseReservation();
-                    taskQueue.push(task);
-                }
-            }
-        }
-        else {
-            taskQueue.push(task);
-        }
-
+            workerIndex = (workerIndex + 1) % queues.size();
+        } while (workerIndex != startIdx);
+        if (!assigned)
+            fallbackQueue.push(task);
+        else
+            workers[workerIndex]->NotifyWorker();
     }
 }
 //check if any task is ready
 bool TaskScheduler::AnyTaskReady() {
-    return !AllQueuesEmpty() || !scheduledTasks.empty() || !delayedTasks.empty();
-}
-//check if all queues are empty
-bool TaskScheduler::AllQueuesEmpty() {
+    std::lock_guard<std::mutex> lock(taskMutex);
+    // 1. Check priority bins
     for (const auto& bin : priorityBins) {
-        if (!bin.empty()) return false;
+        if (!bin.empty()) return true;
     }
-    return true;
-};
+    // 2. Check delayed tasks
+    if (!delayedTasks.empty()) return true;
+    // 3. Check periodic tasks
+    if (!scheduledTasks.empty()) return true;
+
+    return false;
+}
 //get the next task
 std::shared_ptr<BaseTask> TaskScheduler::GetNextTask() {
-    std::lock_guard<std::mutex> lock(taskMutex);
     if (stopFlag) return nullptr;
-    std::shared_ptr<BaseTask> selectedTask = nullptr;
-    // 1. Regular priority bins
-    for (auto& bin : priorityBins) {
-        for (auto it = bin.begin(); it != bin.end(); ) {
-            auto task = *it; 
-            if (!task) { ++it; continue; }
-            if (!task->IsPaused() && task->AreDependenciesComplete() && task->TryTake()) {
 
-                it = bin.erase(it);   
-                return task;          
-            }
-            else {
-                ++it;
-            }
-        }
-    }
-    // 2. Delayed tasks
-    if (!selectedTask) {
-        for (auto& [id, dt] : delayedTasks) {
-            auto& t = dt.task_;
-            if (!t->IsPaused() && t->AreDependenciesComplete() && dt.IsTimeToRun() && t->TryTake()) {
-                selectedTask = t;
-                dt.MarkExecuted(); 
-                break;
-            }
-        }
-    }
-    // 3. Periodic tasks
-    for (auto& [id, pt] : scheduledTasks) {
-        auto& t = pt.task_;
-        if (!t->IsPaused() && t->AreDependenciesComplete() && pt.IsTimeToRun()) {
-            if (t->TryTake()) {
-                selectedTask = t;
-                pt.UpdateExecutionTime();
-                break; 
-            }
-        }
-    }
-    return selectedTask;
-}
+    std::shared_ptr<BaseTask> candidate = nullptr;
 
-//get an available thread
-std::shared_ptr<T_Thread> TaskScheduler::get_available_thread() {
-    for (auto& thread : threadPool) {
-        if (thread.second->GetStatus() == ThreadStatus::Pool) {
-            return thread.second;
+    // Phase 1: pick a candidate while holding the mutex, but do NOT call TryTake()
+    {
+        std::lock_guard<std::mutex> lock(taskMutex);
+
+        if (!fallbackQueue.empty()) {
+            candidate = fallbackQueue.front();
+            fallbackQueue.pop();
+        }
+        else {
+            // 1. Regular priority bins (no per-call sort; bins represent priorities)
+            for (auto& bin : priorityBins) {
+                for (auto it = bin.begin(); it != bin.end(); ++it) {
+                    auto t = *it;
+                    if (!t) continue;
+                    // check basic eligibility without taking the task
+                    if (!t->IsPaused() && t->AreDependenciesComplete()) {
+                        candidate = t;
+                        bin.erase(it);
+                        break;
+                    }
+                }
+                if (candidate) break;
+            }
+
+            // 2. Delayed tasks
+            if (!candidate) {
+                for (auto it = delayedTasks.begin(); it != delayedTasks.end(); ++it) {
+                    auto& dt = it->second;
+                    auto& t = dt.task_;
+                    if (!t) continue;
+                    if (!t->IsPaused() && t->AreDependenciesComplete() && dt.IsTimeToRun()) {
+                        candidate = t;
+                        dt.MarkExecuted();
+                        // remove delayed entry so it won't be considered again
+                        delayedTasks.erase(it);
+                        break;
+                    }
+                }
+            }
+
+            // 3. Periodic tasks
+            if (!candidate) {
+                for (auto& entry : scheduledTasks) {
+                    auto& pt = entry.second;
+                    auto& t = pt.task_;
+                    if (!t) continue;
+                    if (!t->IsPaused() && t->AreDependenciesComplete() && pt.IsTimeToRun()) {
+                        candidate = t;
+                        pt.UpdateExecutionTime();
+                        break;
+                    }
+                }
+            }
+        }
+    } // mutex released here
+
+    if (!candidate) return nullptr;
+
+    // Phase 2: attempt to take the candidate outside the lock.
+    if (candidate->TryTake()) {
+        return candidate;
+    }
+
+    // TryTake failed (another thread raced). Reinsert candidate back into its priority bin.
+    {
+        std::lock_guard<std::mutex> lock(taskMutex);
+        size_t bin_index = static_cast<size_t>(candidate->GetPriority());
+        if (bin_index < priorityBins.size()) {
+            priorityBins[bin_index].push_back(candidate);
+        }
+        else {
+            // fallback if priority is out of range
+            fallbackQueue.push(candidate);
         }
     }
-    return nullptr; 
+
+    return nullptr;
 }
 
 

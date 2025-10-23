@@ -80,17 +80,6 @@ void BaseTask::SetCoreAffinity(int cpuID)
     cpuCoreAffinity = cpuID;
     coreGroupAffinity = -1;
 }
-//get core group affinity
-int BaseTask::GetGroupAffinity() {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    return coreGroupAffinity;
-}
-//set core group affinity
-void BaseTask::SetGroupAffinity(int groupID) {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    coreGroupAffinity = groupID;
-    cpuCoreAffinity = -1;
-}
 //constructor
 Task::Task(std::function<void()> task_fn)
     : task_fn_(task_fn) {
@@ -99,11 +88,10 @@ Task::Task(std::function<void()> task_fn)
 void Task::Execute() {
     try {
         task_fn_();
-        SetCompleted();
     }
     catch (const std::exception& e) {
         std::string tmp = e.what();
-        Logger::Get()->LogInfo(Log_Level::Error, "Error executing task: " + tmp);
     }
+    SetCompleted();
 };
 
