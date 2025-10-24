@@ -69,12 +69,10 @@ void T_Thread::Join() {
 
 	// bounded wait for running flag to clear (worker exit)
 	const int timeoutMs = 5000;
-	const int pollMs = 10;
-	int waited = 0;
-	while (running.load(std::memory_order_acquire) && waited < timeoutMs) {
-		std::this_thread::sleep_for(std::chrono::milliseconds(pollMs));
-		waited += pollMs;
-	}
+	std::unique_lock<std::mutex> lock(joinMutex);
+	cvWorkerDone.wait_for(lock, std::chrono::milliseconds(timeoutMs),
+		[this] { return !running.load(std::memory_order_acquire); });
+
 
 
 	// move thread out under lock, then join outside

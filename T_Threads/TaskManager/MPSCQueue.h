@@ -65,4 +65,16 @@ public:
     bool empty() const {
         return head->next.load(std::memory_order_acquire) == nullptr;
     }
+    void clear() {
+        // Manually destroy current nodes
+        while (head) {
+            Node* tmp = head;
+            head = head->next;
+            delete tmp;
+        }
+
+        // Reinitialize dummy node (same as in constructor)
+        head = new Node();
+        tail.store(head, std::memory_order_relaxed);
+    }
 };

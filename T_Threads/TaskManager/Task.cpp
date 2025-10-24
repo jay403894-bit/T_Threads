@@ -1,12 +1,6 @@
 #include "Task.h"
-void BaseTask::PauseTask() {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    paused = true;
-}
-void BaseTask::ResumeTask() {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    paused = false;
-}
+#include <iostream>
+
 void BaseTask::SetPriority(const PriorityLevel& priority_in) {
     std::lock_guard<std::mutex> lock(task_mutex_);
     priority_ = priority_in;
@@ -16,41 +10,55 @@ PriorityLevel BaseTask::GetPriority() {
     return priority_;
 }; //return the tasks priority level
 void BaseTask::SetCompleted() {
+    std::shared_ptr<TaskCompletedEvent> evtCopy;
     {
         std::lock_guard<std::mutex> lock(task_mutex_);
         ResetTaken();
         completed = true;
+        evtCopy = taskComplete; // capture event under lock
     }
-    wait_cv_.notify_all(); // wake up threads waiting on WaitUntilComplete
 
-}; //set the task_ as completed
+    // wake waiters
+    wait_cv_.notify_all();
+
+    // notify listeners outside the task mutex to avoid lock inversion
+    if (evtCopy) {
+        try { evtCopy->notify(); }
+        catch (...) { /* log if you have logger */ }
+    }
+} //set the task_ as completed
 bool BaseTask::IsCompleted() {
     std::lock_guard<std::mutex> lock(task_mutex_);
     return completed;
 } //return if the task_ is completed or not
-bool BaseTask::AreDependenciesComplete() {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    for (auto& dep : dependencies) {
-        if (auto t = dep.lock()) {
-            if (!t->IsCompleted()) return false;
-        }
-    }
-    return true;
-}
-// Dependencies
-void BaseTask::AddDependency(const std::shared_ptr<BaseTask>& dependency) {
-    std::lock_guard<std::mutex> lock(task_mutex_);
-    dependencies.push_back(dependency);
-}
+
 //return if the task_ is paused
 bool BaseTask::IsPaused() {
     std::lock_guard<std::mutex> lock(task_mutex_);
     return paused;
 }
+bool BaseTask::IsCancelled()
+{
+    return cancelled;
+}
 //try to take the task, ensures only one thread gets it 
 bool BaseTask::TryTake() {
     bool expected = false;
-    return taken.compare_exchange_strong(expected, true);
+    bool success = taken.compare_exchange_strong(expected, true);
+  /*  if (!success) {
+        std::cout << "[Task] TryTake failed for " << GetID() << "\n";
+        f++;
+    }
+    else
+        s++;
+    uint64_t total = s + f;
+    rate = total ? (double)s / (double)total * 100.0 : 0.0;
+    std::cout << "Success rate: " << rate << 
+        " Succeeeded: " << s << 
+        " failed: " << f 
+        << " total " << total << std::endl ;
+    */
+    return success;
 }
 //check if the task is taken
 bool BaseTask::IsTaken() const {
@@ -65,7 +73,7 @@ void BaseTask::WaitUntilComplete() {
 std::unique_lock<std::mutex> lock(wait_mutex_);
 wait_cv_.wait(lock, [this] {
     std::lock_guard<std::mutex> taskLock(task_mutex_);
-    return completed;
+    return completed.load(std::memory_order_acquire);
     });
 }
 //get core affinity
@@ -80,6 +88,21 @@ void BaseTask::SetCoreAffinity(int cpuID)
     cpuCoreAffinity = cpuID;
     coreGroupAffinity = -1;
 }
+void BaseTask::CancelTask()
+{
+    cancelled.store(true,std::memory_order_release);
+}
+
+void BaseTask::PauseTask()
+{
+    paused.store(true, std::memory_order_release);
+}
+void BaseTask::ResumeTask()
+{
+    paused.store(false, std::memory_order_release);
+}
+//return the task complete event
+
 //constructor
 Task::Task(std::function<void()> task_fn)
     : task_fn_(task_fn) {

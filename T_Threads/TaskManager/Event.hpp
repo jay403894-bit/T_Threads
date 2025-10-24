@@ -4,6 +4,13 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include <atomic>
+#pragma once
+#include <functional>
+#include <vector>
+#include <string>
+#include <memory>
+#include <mutex>
 /// a listener for Event
 class Listener {
 public:
@@ -44,13 +51,36 @@ public:
     }
     // Notify all listeners and trigger the callback if defined
     void notify() {
+        // Copy listeners and callback under their respective locks,
+        // then invoke them outside the locks to avoid lock-order inversion.
+        std::vector<std::shared_ptr<Listener>> listenersCopy;
+        std::function<void()> callbackCopy;
         {
             std::lock_guard<std::mutex> lock(listenersMutex);
-            for (const auto& listener : listeners) {
-                listener.get()->on_event_triggered();
+            listenersCopy = listeners;
+        }
+        {
+            std::lock_guard<std::mutex> lock(callbackMutex);
+            callbackCopy = callback_;
+        }
+
+        // invoke outside locks
+        for (const auto& listener : listenersCopy) {
+            if (listener) {
+                try {
+                    listener->on_event_triggered();
+                }
+                catch (...) {
+                    // swallow/log if logger available
+                }
             }
-            if (callback_) {
-                callback_();
+        }
+        if (callbackCopy) {
+            try {
+                callbackCopy();
+            }
+            catch (...) {
+                // swallow/log
             }
         }
     }

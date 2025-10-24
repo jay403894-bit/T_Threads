@@ -2,24 +2,41 @@
 #include <mutex>
 #include "TaskScheduler.h"
 #include "MPSCQueue.h"
+#include "TaskNode.h"
 
 class TaskManager {
 public:
-    // Delete the constructor so no one else can create instances of this manager
-    TaskManager() = delete;
-    TaskManager(const TaskManager& other) = delete;
-    TaskManager& operator=(const TaskManager& other) = delete;
-    // Delete the constructor so no one else can create instances of this manager
-    ~TaskManager() = default;
+    // Singleton access
+    static TaskManager& Instance() {
+        static TaskManager instance;
+        return instance;
+    }
 
-    // Singleton accessor can also potentially access the global clock if needed
-    static std::shared_ptr<TaskScheduler> Get();
-    static void EnqueueToMain(const std::shared_ptr<BaseTask>& task);
-    static void ProcessMainThreadTasks();
+    // Delete copy/move
+    TaskManager(const TaskManager&) = delete;
+    TaskManager& operator=(const TaskManager&) = delete;
+        
+    // Task operations
+    void AddTask(const std::shared_ptr<BaseTask>& task, int cpuID=-1,
+        const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& depA=nullptr,
+        const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& depB=nullptr);
+    void ScheduleTask(const std::shared_ptr<BaseTask>& task, float interval, int cpuID = -1);
+    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS, int cpuID = -1);
+    void StopTask(const std::string& taskID);
+    void PauseTask(const std::string& taskID);
+    void ResumeTask(const std::string& taskID);
+    void EnqueueToMain(const std::shared_ptr<BaseTask>& task);
+    void ProcessMainThreadTasks();
+    void Join();
+    std::string TimeStamp();
 
 private:
-    static inline std::mutex mutex;
-    static inline MPSCQueue<std::shared_ptr<BaseTask>> mainThreadQueue;
-    static inline std::mutex mainQueueMutex;
-    static inline std::shared_ptr<TaskScheduler> task_scheduler_ = nullptr;  // The singleton TaskScheduler instance
+    TaskManager(); // private constructor
+    void callback(std::shared_ptr<BaseTask> t) {
+        task_scheduler_->AddTask(t);
+    }
+    std::mutex mutex;
+    MPSCQueue<std::shared_ptr<BaseTask>> queue;
+    std::shared_ptr<TaskScheduler> task_scheduler_ = nullptr;
+    std::unordered_map<std::shared_ptr<BaseTask>, std::vector<std::shared_ptr<BaseTask>>> tasks_;
 };

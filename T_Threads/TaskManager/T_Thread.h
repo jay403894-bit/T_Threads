@@ -10,7 +10,7 @@
 #include "Task.h"
 #include "TaskQueue.h"
 
-class T_Thread :public TaskQueue {
+class T_Thread :public SharedQueues {
 public:
     //constructor 
     T_Thread();
@@ -43,6 +43,8 @@ private:
     void Worker(); 
     std::mutex threadMutex; //mutex to lock the thread class
     std::mutex workerMutex; //worker mutex for cv
+    std::mutex joinMutex;  //join thread mutex
+    std::condition_variable cvWorkerDone; //worker done cv
     std::condition_variable cv; //condition variable to notify the Worker
     std::condition_variable cvAffinity;
     std::shared_ptr<BaseTask> task_; //pointer to the task the thread is directed to
@@ -59,5 +61,4 @@ private:
     int queueIndex = 0;
     static std::mutex affinityMutex;
     static std::atomic<int> nextIndex;
-    
 };

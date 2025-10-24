@@ -42,22 +42,13 @@
     <ClCompile Include="Utilities\Clock.cpp">
       <Filter>Source Files\Utilities</Filter>
     </ClCompile>
-    <ClCompile Include="Utilities\Log.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
-    <ClCompile Include="Utilities\Logger.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
-    <ClCompile Include="Utilities\Object.cpp">
+    <ClCompile Include="Utilities\UniqueID.cpp">
       <Filter>Source Files\Utilities</Filter>
     </ClCompile>
     <ClCompile Include="Utilities\RandomGenerator.cpp">
       <Filter>Source Files\Utilities</Filter>
     </ClCompile>
     <ClCompile Include="TaskManager\Task.cpp">
-      <Filter>Source Files\TaskManager</Filter>
-    </ClCompile>
-    <ClCompile Include="TaskManager\TaskQueue.cpp">
       <Filter>Source Files\TaskManager</Filter>
     </ClCompile>
   </ItemGroup>
@@ -77,13 +68,7 @@
     <ClInclude Include="Utilities\Clock.h">
       <Filter>Header Files\Utilities</Filter>
     </ClInclude>
-    <ClInclude Include="Utilities\Log.h">
-      <Filter>Header Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="Utilities\Logger.h">
-      <Filter>Header Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="Utilities\Object.h">
+    <ClInclude Include="Utilities\UniqueID.h">
       <Filter>Header Files\Utilities</Filter>
     </ClInclude>
     <ClInclude Include="Utilities\RandomGenerator.h">
@@ -93,6 +78,18 @@
       <Filter>Header Files\TaskManager</Filter>
     </ClInclude>
     <ClInclude Include="TaskManager\TaskQueue.h">
+      <Filter>Header Files\TaskManager</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskManager\SPSCQueue.h">
+      <Filter>Header Files\TaskManager</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskManager\ChaseLevDeque.h">
+      <Filter>Header Files\TaskManager</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskManager\MPSCQueue.h">
+      <Filter>Header Files\TaskManager</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskManager\TaskNode.h">
       <Filter>Header Files\TaskManager</Filter>
     </ClInclude>
   </ItemGroup>

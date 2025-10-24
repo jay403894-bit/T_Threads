@@ -6,13 +6,13 @@
 #include <thread>          // this_thread::sleep_for, hardware_concurrency
 #include <cmath>           // sqrt
 
-#include "TaskManager/Event.hpp"       // Event, Listener
-#include "TaskManager/TaskManager.h"  // TaskManager, TaskScheduler, Task
+#include "TaskManager/Event.hpp"      
+#include "TaskManager/TaskManager.h"  
 
 //a listener event
 class TestListener : public Listener {
     void on_event_triggered() override {
-        std::cout << "event triggered\n";
+        std::cout << TaskManager::Instance().TimeStamp() << std::endl;
     }
 };
 //an event
@@ -25,42 +25,54 @@ class TestEvent : public Event {
 //setup a task to be used as a delayed task
 //the delay isnt set here its just named that for clarity to show how its being used
 auto delayed_task = std::make_shared<Task>([]() {
-    std::cout << "Delayed task executed at " << TaskManager::GetClock()->ToString() << "\n";
+    std::cout << "Delayed task executed at " << TaskManager::Instance().TimeStamp() << "\n";
     });
 
 // Define a simple task that prints Hello, World! and the time it was printed
-std::shared_ptr<BaseTask> create_hello_world_task() {
-    auto task_fn = []() {
-        std::cout << "Hello, World! " << TaskManager::GetClock()->ToString() << "\n";
+//uses an event to print the time from the main thread -- multithread events
+std::shared_ptr<BaseTask> create_hello_world_task(std::shared_ptr<Event> e) {
+    auto task_fn = [e]() {
+        std::cout << "Hello, World! \n";
+        e->notify();
         };
+    
+    return std::make_shared<Task>(task_fn);
+}
+std::shared_ptr<BaseTask> create_hello_task() {
+    auto task_fn = []() {
+        std::cout << "Hello, World! \n";
+        };
+
     return std::make_shared<Task>(task_fn);
 }
 // a task that will be used to show dependency management
+// will display dependency fulfilled once its dependent tasks have completed
 std::shared_ptr<BaseTask> dependency_task() {
     auto task_fn = []() {
         std::cout << "Dependency Fulfilled" << std::endl;
         };
     return std::make_shared<Task>(task_fn);
 }
-//a callback function to show how events work
+//a callback function to show how events work cross thread
 void print_callback() {
-    std::cout << "callback\n";
+    std::cout << TaskManager::Instance().TimeStamp() << std::endl;
 }
 
-//a simple integer function using std function
+//a simple integer function using std function to use with int task
 std::function<int(int)> int_func(int a, int b) {
     return [a, b](int x) {
         return a + b + x;
         };
 }
 
-//another simple integer function using a regular function
+//another simple integer function using a regular function for the thread path
 int int_func_2(int c) {
    return c + 10;
 }
 
 
-//another way to build a task, int task shows how you can set and retrieve data from a task
+//this random task class shows basic i/o with the main thread
+//and also how you would link a task up with functions outside
 class Int_Task : public BaseTask {
 public:
     // Default constructor definition
@@ -136,51 +148,63 @@ private:
 
 //test 1 shows the basic features and usage of the scheduler
 int test1() {
-    // Create a test event and 2 test listeners
-    TestEvent testEvent;
-    std::shared_ptr<TestListener> listener1 = std::make_shared<TestListener>();
-    std::shared_ptr<TestListener> listener2 = std::make_shared<TestListener>();
+
+    //multithreaded event test
+    //pointer to multiproducer single consumer queue of events 
+    std::shared_ptr<TestEvent> testEvent = std::make_shared<TestEvent>();
+    std::shared_ptr<TestListener> listener = std::make_shared<TestListener>();
 
     // Set callback function
-    testEvent.set_callback(print_callback);
-    testEvent.subscribe(listener1);
-    testEvent.subscribe(listener2);
-
-    // Create a TaskScheduler
+    testEvent->subscribe(listener);
+       
+   
+    // setup an instance of the int task 
     auto i_task = std::make_shared<Int_Task>(); // Initialize the shared pointer here
 
-    TaskManager::Get()->ScheduleDelayedTask(delayed_task,10);
 
+    //set the input data for the task
     std::vector<int> intData = { 1, 2, 3, 4 };  // Input data
-    i_task->SetData(intData);  // Now it's safe to call SetData()
-   auto dep_task = dependency_task();
-    dep_task.get()->AddDependency(i_task);
-    TaskManager::Get()->AddTask(dep_task);
-    // Create the Hello World task
-    auto hello_task = create_hello_world_task();
-    // Add the periodic task to the scheduler (500ms interval)
-    TaskManager::Get()->ScheduleTask(hello_task, 500);
-    //notify the test event
-    testEvent.notify();
+    i_task->SetData(intData);  
 
-    //let the thread sleep to run automated tasks for 5 seconds
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    //schedule the delated task to run after 50ms
+    TaskManager::Instance().ScheduleDelayedTask(delayed_task, 1000);
+    //create the dependency task and wait for int task and delayed_task to complete
+    auto dep_task = dependency_task();
+    std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>> deps = std::make_shared<std::vector<std::shared_ptr<BaseTask>>>();
+    deps->push_back(i_task);
+    deps->push_back(delayed_task);
+    TaskManager::Instance().AddTask(dep_task,0,deps);
+    // Create the Hello World task and pass in the test event
+    auto hello_task = create_hello_world_task(testEvent);
+    // Add the periodic task to the scheduler (500ms interval)
+    TaskManager::Instance().ScheduleTask(hello_task, 100);
 
     // Add the Int_Task to the TaskManager
-    TaskManager::Get()->AddTask(i_task);
+    TaskManager::Instance().AddTask(i_task);
 
-    // Run for 5 seconds to process tasks
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-    //stop the periodic task from running
-    TaskManager::Get()->StopTask(hello_task->GetID());
+    //wait for the dependent task to complete 
+    dep_task->WaitUntilComplete();
+    // you can choose to just stop the periodic task with 
+   // TaskManager::Get()->StopTask(hello_task->GetID());
+    //but if you want to shut it down completely temporarily you can
+    TaskManager::Instance().Join();
+    //to join and collpase the entire pool
+    //however this incurs a small overhead to restart so only do this if you 
+    //dont intend to continue using the task manager for awhile 
+    //here for testing purposes we just join it and restart
+    
+    //before exiting if you want the event to stop notifying you have to unsubscribe
+    //otherwise the event will continue calling back past the scope of this function
+    testEvent->unsubscribe(listener);
+ //   std::this_thread::yield();
+    TaskManager::Instance().StopTask(hello_task->GetID());
     return 0;
 }
 
 //test2 shows the prime number task
 int test2(const int& r) {
-    auto scheduler = TaskManager::Get();
     const int range = r;
-    const int numThreads = std::thread::hardware_concurrency()-1; //number of threads is -1 because taskscheduler uses 1
+    const int numThreads = std::thread::hardware_concurrency()-2; //number of threads is -1 because taskscheduler uses 1
     const int chunkSize = range / numThreads;
 
     std::shared_ptr<std::atomic<int>> totalPrimes = std::make_shared<std::atomic<int>>(0);
@@ -190,17 +214,39 @@ int test2(const int& r) {
         int start = i * chunkSize + 1;
         int end = (i == numThreads - 1) ? range : (start + chunkSize - 1);
         auto task = make_shared<PrimeCounterTask>(start, end, totalPrimes);
-        scheduler->AddTask(task);
+        TaskManager::Instance().AddTask(task);
         tasks.push_back(task);
     }
     bool allDone = true;
-    //for (auto task : tasks) {
-     //   while(!task->IsCompleted()){}
-   // }
+
     for (auto task : tasks) {
         task->WaitUntilComplete();
-      }
+    }
     std::cout << "Total primes from 1 to " << range << " = " << *totalPrimes << std::endl;
+    return 0;
+}
+
+int test3() {
+    auto hello_task = create_hello_world_task(std::make_shared<TestEvent>());
+    std::vector<std::shared_ptr<BaseTask>> tasks;
+    // Add the periodic task to the scheduler (500ms interval)
+    auto enqueueToMainTask = std::make_shared<Task>([hello_task]() {
+        TaskManager::Instance().EnqueueToMain(hello_task);
+        });
+    int tasksadded = 0;
+    for (int i = 0; i < 100; ++i) {
+        TaskManager::Instance().AddTask(enqueueToMainTask);
+        tasks.push_back(hello_task);
+        tasksadded++;
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    if (tasksadded > tasks.size())
+        std::cout << "Missed tasks!\n";
+    else
+        std::cout << "All Tasks completed!\n";
+
+    TaskManager::Instance().ProcessMainThreadTasks();
+
     return 0;
 }
 
@@ -208,11 +254,11 @@ int main() {
     //run test 1
     test1();
     //run test 2
-    test2(10000);
-    //sleep the thread for a few seconds to show that the hello task was stopped successfully 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    //prime number test
+    test2(1000000);
+    //run test 3 
+    //main thread enqueue test
+    test3();
 
-    // Stop the scheduler after the test duration
-    TaskManager::Get()->StopAll();
     return 0;
 }
