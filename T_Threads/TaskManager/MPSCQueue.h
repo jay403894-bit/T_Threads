@@ -52,10 +52,10 @@ public:
         prev->next.store(node, std::memory_order_release);
     }
 
-    // Consumer: pop task
+    // Consumer: pop task_
     std::shared_ptr<T> pop() {
         Node* next = head->next.load(std::memory_order_acquire);
-        if (!next) return nullptr;  // queue empty
+        if (!next) return nullptr;  // queue_ empty
         std::shared_ptr<T> result = next->data;
         delete head;
         head = next;

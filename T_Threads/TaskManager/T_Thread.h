@@ -12,53 +12,45 @@
 
 class T_Thread :public SharedQueues {
 public:
-    //constructor 
     T_Thread();
-    //non movable 
     T_Thread(const T_Thread& other) = delete;
-    //non copyable 
     T_Thread& operator=(const T_Thread& other) = delete;
-    //destructor
     ~T_Thread();
-    //starts the worker
-    void StartWorker(int cpuAffinity);
-    //get the thread id
-    std::thread::id GetID();
-    // Assign a task to the thread. Returns true on success.
-    bool SetTask(const std::shared_ptr<BaseTask>& task);
-    //set queue index
-    void SetQueueIndex(int index);
-    //explicit join 
-    void Join();
-    //notify worker
-    void NotifyWorker();
+    void startWorker(int cpuAffinity);
+    std::thread::id getId();
+    bool setTask(const std::shared_ptr<BaseTask>& task_);
+    void setQueueIndex(int index);
+    void join();
+    void notifyWorker();
 #ifdef _WIN32
     //set cpu core affinity (singular)
-    bool SetAffinity(int cpuID, std::vector<int>& coreOccupied, int numCores);
+    bool setAffinity(int cpu_id, std::vector<int>& core_occupied, int num_cores);
 #else
     // Implement POSIX sched_setaffinity if cross-platform later
 #endif
 private:
     //the worker function 
-    void Worker(); 
-    std::mutex threadMutex; //mutex to lock the thread class
-    std::mutex workerMutex; //worker mutex for cv
-    std::mutex joinMutex;  //join thread mutex
-    std::condition_variable cvWorkerDone; //worker done cv
-    std::condition_variable cv; //condition variable to notify the Worker
-    std::condition_variable cvAffinity;
-    std::shared_ptr<BaseTask> task_; //pointer to the task the thread is directed to
-    std::thread t_thread; //the thread
-    std::thread::native_handle_type nativeHandle; //native thread handle
+    void worker(); 
+
+    static std::mutex affinity_mutex_;
+    static std::atomic<int> next_index_;
+    std::atomic<bool> running_{ false };
+    std::atomic<bool> ready_{ false };
+    std::atomic<bool> joining_{ false };
+    int queue_index_ = 0;
+    std::mutex thread_mutex_;
+    std::mutex worker_mutex_;
+    std::mutex join_mutex_; 
+    std::condition_variable cv_worker_done_;
+    std::condition_variable cv_; 
+    std::condition_variable cv_affinity_;
+    std::shared_ptr<BaseTask> task_; 
+    std::thread thread_;
+    std::thread::native_handle_type native_handle_; 
 #ifdef _WIN32
-    DWORD_PTR mask;
+    DWORD_PTR mask_;
 #else
     // Implement POSIX sched_setaffinity if cross-platform later
 #endif
-    std::atomic<bool> running{ false }; //running flag
-    std::atomic<bool> ready{ false }; //ready flag
-    std::atomic<bool> joining{ false };
-    int queueIndex = 0;
-    static std::mutex affinityMutex;
-    static std::atomic<int> nextIndex;
+
 };

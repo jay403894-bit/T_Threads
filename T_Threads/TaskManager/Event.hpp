@@ -11,11 +11,11 @@
 #include <string>
 #include <memory>
 #include <mutex>
-/// a listener for Event
+/// a listener_ for Event
 class Listener {
 public:
     virtual ~Listener() = default;
-    virtual void on_event_triggered() = 0;
+    virtual void onEventTriggered() = 0;
 };
 
 class Event {
@@ -24,34 +24,34 @@ public:
     Event& operator=(const Event& other) = delete; // Prevent copying
     Event(const Event& other) = delete; // Prevent copying
     virtual ~Event() = default;  // Virtual destructor
-    // Subscribe a listener to the event
-    void subscribe(std::shared_ptr<Listener> listener) {
+    // Subscribe a listener_ to the event
+    void subscribe(std::shared_ptr<Listener> listener_) {
         {
             std::lock_guard<std::mutex> lock(listenersMutex);
-            listeners.emplace_back(std::move(listener));  // Add the listener to the list
+            listeners.emplace_back(std::move(listener_));  // Add the listener_ to the list
         }
     }
-    //unsubscribe a listener from the event
-    void unsubscribe(const std::shared_ptr<Listener>& listener) {
+    //unsubscribe a listener_ from the event
+    void unsubscribe(const std::shared_ptr<Listener>& listener_) {
         std::lock_guard<std::mutex> lock(listenersMutex);
         listeners.erase(
             std::remove_if(
                 listeners.begin(), listeners.end(),
                 [&](const std::shared_ptr<Listener>& l) {
-                    return l == listener;
+                    return l == listener_;
                 }),
             listeners.end());
     }
-    // Set a callback to be triggered when the event is notified
-    void set_callback(std::function<void()> callback) {
+    // Set a callback_ to be triggered when the event is notified
+    void setCallback(std::function<void()> callback_) {
         {
             std::lock_guard<std::mutex> lock(callbackMutex);
-            callback_ = std::move(callback);
+            callback_ = std::move(callback_);
         }
     }
-    // Notify all listeners and trigger the callback if defined
+    // Notify all listeners and trigger the callback_ if defined
     void notify() {
-        // Copy listeners and callback under their respective locks,
+        // Copy listeners and callback_ under their respective locks,
         // then invoke them outside the locks to avoid lock-order inversion.
         std::vector<std::shared_ptr<Listener>> listenersCopy;
         std::function<void()> callbackCopy;
@@ -65,10 +65,10 @@ public:
         }
 
         // invoke outside locks
-        for (const auto& listener : listenersCopy) {
-            if (listener) {
+        for (const auto& listener_ : listenersCopy) {
+            if (listener_) {
                 try {
-                    listener->on_event_triggered();
+                    listener_->onEventTriggered();
                 }
                 catch (...) {
                     // swallow/log if logger available
@@ -90,5 +90,5 @@ private:
     std::mutex listenersMutex;
     std::mutex callbackMutex;
     std::vector<std::shared_ptr<Listener>> listeners;  // Pool of listeners
-    std::function<void()> callback_;  // A callback function to be executed on event trigger
+    std::function<void()> callback_;  // A callback_ function to be executed on event trigger
 };

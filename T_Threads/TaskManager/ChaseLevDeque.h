@@ -12,7 +12,7 @@ template <typename T>
 class ChaseLevDeque {
 public:
     explicit ChaseLevDeque(size_t capacity = 1024)
-        : buffer(capacity), mask(capacity - 1), top(0), bottom(0) {
+        : buffer(capacity), mask_(capacity - 1), top(0), bottom(0) {
         if ((capacity & (capacity - 1)) != 0) {
             throw std::runtime_error("Capacity must be a power of 2");
         }
@@ -23,7 +23,7 @@ public:
         size_t b = bottom.load(std::memory_order_relaxed);
         size_t t = top.load(std::memory_order_acquire);
 
-        buffer[b & mask] = item;
+        buffer[b & mask_] = item;
 
         // ensure the store to buffer is visible before we publish bottom
         std::atomic_thread_fence(std::memory_order_release);
@@ -48,8 +48,8 @@ public:
         size_t t = top.load(std::memory_order_acquire);
 
         if (t <= b) {
-            T item = buffer[b & mask];
-            buffer[b & mask] = T(); // clear slot if T supports it
+            T item = buffer[b & mask_];
+            buffer[b & mask_] = T(); // clear slot if T supports it
 
             if (t == b) {
                 // last element: compete with stealers
@@ -79,7 +79,7 @@ public:
         size_t b = bottom.load(std::memory_order_acquire);
 
         if (t < b) {
-            T item = buffer[t & mask];
+            T item = buffer[t & mask_];
             if (!top.compare_exchange_strong(t, t + 1,
                 std::memory_order_seq_cst, std::memory_order_relaxed)) {
                 // lost race
@@ -104,7 +104,7 @@ public:
 
 private:
     std::vector<T> buffer;
-    size_t mask;
+    size_t mask_;
     std::atomic<size_t> top;
     std::atomic<size_t> bottom;
 };

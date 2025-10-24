@@ -1,17 +1,17 @@
 #include "RandomGenerator.h"
-int RandomGenerator::GenerateInt(int min, int max) {
-    std::lock_guard<std::mutex> lock(rngMutex);
+int RandomGenerator::generateInt(int min, int max) {
+    std::lock_guard<std::mutex> lock(rng_mutex_);
     std::uniform_int_distribution<int> dist(min, max);
-    return dist(engine);
+    return dist(engine_);
 }
-float RandomGenerator::GenerateFloat(float min, float max) {
-    std::lock_guard<std::mutex> lock(rngMutex);
+float RandomGenerator::generateFloat(float min, float max) {
+    std::lock_guard<std::mutex> lock(rng_mutex_);
     std::uniform_real_distribution<float> dist(min, max);
-    return dist(engine);
+    return dist(engine_);
 }
 
-double RandomGenerator::GenerateDouble(double min, double max) {
-    std::lock_guard<std::mutex> lock(rngMutex);
+double RandomGenerator::generateDouble(double min, double max) {
+    std::lock_guard<std::mutex> lock(rng_mutex_);
     std::uniform_real_distribution<double> dist(min, max);
-    return dist(engine);
+    return dist(engine_);
 }

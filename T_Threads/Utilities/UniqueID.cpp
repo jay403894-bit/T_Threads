@@ -1,20 +1,20 @@
 #include "UniqueID.h"
-UniqueID::UniqueID() { SetID(GenerateUUID()); }
-//return the id
-std::string UniqueID::GetID() {
-    return objectID;
+UniqueID::UniqueID() { setId(GenerateUUID()); }
+//return the id_
+std::string UniqueID::getId() {
+    return object_id_;
 }
 //equality operator
 bool UniqueID::operator==(const UniqueID& other) const {
-    return objectID == other.objectID;
+    return object_id_ == other.object_id_;
 }
 //inequality operator
 bool UniqueID::operator!=(const UniqueID& other) const
 {
-    return objectID != other.objectID;
+    return object_id_ != other.object_id_;
 }
-//set the id
-void UniqueID::SetID(const std::string& id) { objectID = id; }
+//set the id_
+void UniqueID::setId(const std::string& id_) { object_id_ = id_; }
 
 std::string UniqueID::GenerateUUID() {
     std::random_device rd;

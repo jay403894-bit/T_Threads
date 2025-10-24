@@ -37,6 +37,10 @@ public:
         return ((head.load(std::memory_order_acquire) + 1) & (Capacity - 1)) == tail.load(std::memory_order_acquire);
     }
 
+    void clear() {
+        head_ = tail_ = 0;
+    }
+
 private:
     std::array<std::shared_ptr<BaseTask>, Capacity> buffer;
     std::atomic<size_t> head;

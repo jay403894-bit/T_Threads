@@ -1,479 +1,364 @@
 #include "TaskScheduler.h"
 #include "TaskManager.h"
 
-
-
-// Default constructor
 PeriodicTask::PeriodicTask()
-    : task_(nullptr), scheduledTime(0.0f), interval(0.0f), clock(nullptr) {
+    : task_(nullptr), scheduledTime(0.0f), interval(0.0f), clock_(nullptr) {
 }
-//default constructor
 DelayedTask::DelayedTask()
-    : task_(nullptr), scheduledTime(0.0f), clock(nullptr), executed(false) {
+    : task_(nullptr), scheduledTime(0.0f), clock_(nullptr), executed(false) {
 }
-
-// Parameterized constructor for initializing the task_ with interval and game timer
 PeriodicTask::PeriodicTask(const std::shared_ptr<BaseTask>& task_, float interval_,const std::shared_ptr<Clock>& timer)
-    : task_(task_), interval(interval_), clock(timer) {
-    scheduledTime = clock->ElapsedMS();  // Initialize to the current game time
+    : task_(task_), interval(interval_), clock_(timer) {
+    scheduledTime = clock_->elapsedMs();  
 }
-
-// Check if it's time to run the task_ based on TotalTime and interval
-bool PeriodicTask::IsTimeToRun() const {
-    return !cancelled && (clock->ElapsedMS() >= scheduledTime);
+bool PeriodicTask::isTimeToRun() const {
+    return !cancelled_ && (clock_->elapsedMs() >= scheduledTime);
 }
-
-// update the periodic execution time
-void PeriodicTask::UpdateExecutionTime() {
-    scheduledTime = clock->ElapsedMS() + interval;
+void PeriodicTask::updateExecutionTime() {
+    scheduledTime = clock_->elapsedMs() + interval;
 }
-
-//constructor
 TaskScheduler::TaskScheduler() {
-    if (constructed) {
+    if (constructed_) {
         throw std::runtime_error("Only one TaskScheduler allowed!");
     }
-    constructed = true;
-    clock = std::make_shared<Clock>();
-    StartPool();
+    constructed_ = true;
+    clock_ = std::make_shared<Clock>();
+    startPool();
 }
-
-//destructor
 TaskScheduler::~TaskScheduler() {
-    if (!stopFlag)
-        Join();
+    if (!stop_flag_)
+        join();
 }
-
-//add a task
-void TaskScheduler::AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
-    if (stopFlag.load()) {
-        StartPool();
-        stopFlag.store(false);
+void TaskScheduler::addTask(const std::shared_ptr<BaseTask>& task_, int cpuID) {
+    if (stop_flag_.load()) {
+        startPool();
+        stop_flag_.store(false);
     }
-    task_->SetCoreAffinity(cpuID);
-    allTasks[task_->GetID()] = task_;
-
-    size_t bin_index = static_cast<size_t>(task_->GetPriority());
-    if (bin_index >= priorityBins.size()) return;
-
+    task_->setCoreAffinity(cpuID);
+    task_map_[task_->getId()] = task_;
+    size_t bin_index_ = static_cast<size_t>(task_->getPriority());
+    if (bin_index_ >= priority_bins_.size()) return;
     {
-        priorityBinMutexes[bin_index]->lock();
-        priorityBins[bin_index].push_back(task_);
-        std::push_heap(priorityBins[bin_index].begin(), priorityBins[bin_index].end(), PriorityCompare());
-        priorityBinMutexes[bin_index]->unlock();
+        priority_bin_mutexes_[bin_index_]->lock();
+        priority_bins_[bin_index_].push_back(task_);
+        std::push_heap(priority_bins_[bin_index_].begin(), priority_bins_[bin_index_].end(), PriorityCompare());
+        priority_bin_mutexes_[bin_index_]->unlock();
     }
-    cv.notify_one();
+    cv_.notify_one();
 }
-//schedule a periodic task
-void TaskScheduler::ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID) {
-    if (stopFlag)
+void TaskScheduler::scheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID) {
+    if (stop_flag_)
     {
-        StartPool();
-        stopFlag = false;
+        startPool();
+        stop_flag_ = false;
     }
-    task_->SetCoreAffinity(cpuID);    std::string id = task_->GetID();
-    allTasks[task_->GetID()] = task_;
-    PeriodicTask pt(task_, interval, clock);
+    task_->setCoreAffinity(cpuID);    std::string id_ = task_->getId();
+    task_map_[task_->getId()] = task_;
+    PeriodicTask pt(task_, interval, clock_);
     {
-        std::lock_guard<std::mutex> lock(taskMutex);
-        scheduledTasks[id] = pt;
-        periodicHeap.push_back(pt);
-        std::push_heap(periodicHeap.begin(), periodicHeap.end(), PeriodicTaskCompare());
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        scheduled_tasks_[id_] = pt;
+        periodic_heap_.push_back(pt);
+        std::push_heap(periodic_heap_.begin(), periodic_heap_.end(), PeriodicTaskCompare());
     }
 }
-//schedule a delayed task
-void TaskScheduler::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, int cpuID) {
-    if (stopFlag.load(std::memory_order_acquire)) {
-        StartPool();
-        stopFlag.store(false, std::memory_order_release);
+void TaskScheduler::scheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS, int cpuID) {
+    if (stop_flag_.load(std::memory_order_acquire)) {
+        startPool();
+        stop_flag_.store(false, std::memory_order_release);
     }
-    task_->SetCoreAffinity(cpuID);
-    allTasks[task_->GetID()] = task_;
-    std::string id = task_->GetID();
-    DelayedTask dt(task_, delayMS, clock);
+    task->setCoreAffinity(cpuID);
+    task_map_[task->getId()] = task;
+    std::string id_ = task->getId();
+    DelayedTask dt(task, delayMS, clock_);
     {
-        std::lock_guard<std::mutex> lock(taskMutex);
-        delayedTasks[id] = dt;
-        delayedHeap.push_back(dt);
-        std::push_heap(delayedHeap.begin(), delayedHeap.end(), DelayedTaskCompare());
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        delayed_tasks_[id_] = dt;
+        delayed_heap_.push_back(dt);
+        std::push_heap(delayed_heap_.begin(), delayed_heap_.end(), DelayedTaskCompare());
     }
 }
-
-//stop all tasks and threads
-void TaskScheduler::Join() {
-    // Signal shutdown
-    stopFlag = true;
-    cv.notify_all(); // wake scheduler thread
-
-    // Cancel scheduled tasks
+void TaskScheduler::join() {
+    stop_flag_ = true;
+    cv_.notify_all(); 
     {
-        std::lock_guard<std::mutex> lock(taskMutex);
-        for (auto& t : scheduledTasks) {
-            t.second.cancelled = true;
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        for (auto& t : scheduled_tasks_) {
+            t.second.cancelled_ = true;
         }
     }
-
-    //join all workers 
-    for (auto& worker : workers) {
-        worker->Join(); // blocks until each worker finishes
+    for (auto& worker : workers_) {
+        worker->join(); 
     }
-
-    // Join scheduler thread (bootstrap)
-    if (workerThread.joinable()) {
-        workerThread.join();
+    if (worker_thread_.joinable()) {
+        worker_thread_.join();
     }
-
-    // Clear tasks and containers
     {
-        std::lock_guard<std::mutex> lock(taskMutex);
-        scheduledTasks.clear();
-        delayedTasks.clear();
-        for (auto& bin : priorityBins) {
+        std::lock_guard<std::mutex> lock(task_mutex_);
+        scheduled_tasks_.clear();
+        delayed_tasks_.clear();
+        for (auto& bin : priority_bins_) {
             bin.clear();
         }
     }
-
-    workers.clear();
+    workers_.clear();
 }
-//stop a task_
-void TaskScheduler::StopTask(const std::string& id) {
-    std::lock_guard<std::mutex> lock(taskMutex);
-    allTasks[id]->CancelTask();
+void TaskScheduler::stopTask(const std::string& id) {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    task_map_[id]->cancelTask();
 }
-
-//pause a task_
-void TaskScheduler::PauseTask(std::string id) {
-    std::lock_guard<std::mutex> lock(taskMutex);
-    allTasks[id]->PauseTask();
+void TaskScheduler::pauseTask(std::string id) {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    task_map_[id]->pauseTask();
 
 }
-//resume a task
-void TaskScheduler::ResumeTask(std::string id) {
-    std::lock_guard<std::mutex> lock(taskMutex);
-    allTasks[id]->ResumeTask();
-
+void TaskScheduler::resumeTask(std::string id) {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    task_map_[id]->resumeTask();
 }
-//return a timestamp in ms
-std::string TaskScheduler::TimeStamp() { return clock->ToString(); }
-
-void TaskScheduler::StartPool(unsigned int numWorkers) {
-    if (constructed == false) { /* already handled in ctor, but be defensive */ }
-    // create per-priority MPSC queues
+std::string TaskScheduler::timeStamp() { return clock_->toString(); }
+void TaskScheduler::startPool(unsigned int num_workers) {
+    if (constructed_ == false) {  }
     size_t levels = static_cast<size_t>(PriorityLevel::BLOCKED) + 1;
-    priorityBins.clear();
-    priorityBins.resize(levels);
+    priority_bins_.clear();
+    priority_bins_.resize(levels);
     for (size_t i = 0; i < levels; ++i) {
-        priorityBins[i].clear();
-        priorityBinMutexes[i] = std::make_unique<std::mutex>();
+        priority_bins_[i].clear();
+        priority_bin_mutexes_[i] = std::make_unique<std::mutex>();
     }
-    // determine a default numWorkers if caller passed 0
     unsigned int hw = std::thread::hardware_concurrency();
     if (hw == 0) hw = 4;
-    if (numWorkers == 0) numWorkers = std::max(2u, hw - 2u); // keep two cores for main and scheduler
-    // Preallocate
-    workers.clear();
-    queues.clear();
-    workers.reserve(numWorkers);
-    queues.reserve(numWorkers);
-
-    // occupancy
-    coreOccupied.clear();
-    coreOccupied.assign(numWorkers, 0);        // 0 == free, 1 == occupied
-
-
-    for (unsigned int i = 0; i < numWorkers; ++i) {
-        // create queue and worker
-        queues.push_back(std::make_unique<ChaseLevDeque<std::shared_ptr<BaseTask>>>());
-
+    if (num_workers == 0) num_workers = std::max(2u, hw - 2u);
+    workers_.clear();
+    queues_.clear();
+    workers_.reserve(num_workers);
+    queues_.reserve(num_workers);
+    core_occupied_.clear();
+    core_occupied_.assign(num_workers, 0);       
+    for (unsigned int i = 0; i < num_workers; ++i) {
+        queues_.push_back(std::make_unique<ChaseLevDeque<std::shared_ptr<BaseTask>>>());
         auto worker = std::make_shared<T_Thread>();
-        worker->SetAffinity(i + 2, coreOccupied, numWorkers);
-        worker->SetQueueIndex(i);
-        workers.push_back(worker);
-        worker->StartWorker(i + 2);
+        worker->setAffinity(i + 2, core_occupied_, num_workers);
+        worker->setQueueIndex(i);
+        workers_.push_back(worker);
+        worker->startWorker(i + 2);
     }
-    //bootstrap scheduler
-    // use a shared atomic so the lambda can safely observe the ready flag
-    auto ready = std::make_shared<std::atomic<bool>>(false);
-
-    // store the thread in the member so its destructor won't call std::terminate
-    workerThread = std::thread([this, ready]() { // <-- capture by value
-        while (!ready->load(std::memory_order_acquire)) std::this_thread::yield();
-        this->Worker();
+    auto ready_ = std::make_shared<std::atomic<bool>>(false);
+    worker_thread_ = std::thread([this, ready_]() { // <-- capture by value
+        while (!ready_->load(std::memory_order_acquire)) std::this_thread::yield();
+        this->worker();
         });
-
-    // set affinity for the scheduler thread
 #ifdef _WIN32
-    DWORD_PTR mask = 1ULL << 1;
-    SetThreadAffinityMask(workerThread.native_handle(), mask);
+    DWORD_PTR mask_ = 1ULL << 1;
+    SetThreadAffinityMask(worker_thread_.native_handle(), mask_);
 #endif
-
-    // signal the thread it can start
-    ready->store(true, std::memory_order_release);
-    constructed = true;
+    ready_->store(true, std::memory_order_release);
+    constructed_ = true;
 }
-
-
-void TaskScheduler::PushDelayed(const DelayedTask& t) {
-    delayedHeap.push_back(t);
-    std::push_heap(delayedHeap.begin(), delayedHeap.end(), DelayedTaskCompare());
+void TaskScheduler::pushDelayed(const DelayedTask& t) {
+    delayed_heap_.push_back(t);
+    std::push_heap(delayed_heap_.begin(), delayed_heap_.end(), DelayedTaskCompare());
 }
-
-void TaskScheduler::PushPeriodic(const PeriodicTask& t) {
-    periodicHeap.push_back(t);
-    std::push_heap(periodicHeap.begin(), periodicHeap.end(), PeriodicTaskCompare());
+void TaskScheduler::pushPeriodic(const PeriodicTask& t) {
+    periodic_heap_.push_back(t);
+    std::push_heap(periodic_heap_.begin(), periodic_heap_.end(), PeriodicTaskCompare());
 }
-bool TaskScheduler::PopNextDelayed(TaskCandidate& out) {
-    if (delayedHeap.empty()) return false;
-    if (!delayedHeap.front().IsTimeToRun()) return false;
+bool TaskScheduler::popNextDelayed(TaskCandidate& out) {
+    if (delayed_heap_.empty()) return false;
+    if (!delayed_heap_.front().isTimeToRun()) return false;
 
-    auto top = delayedHeap.front();
-    std::pop_heap(delayedHeap.begin(), delayedHeap.end(), DelayedTaskCompare());
-    delayedHeap.pop_back();
-    delayedTasks.erase(top.task_->GetID());
+    auto top = delayed_heap_.front();
+    std::pop_heap(delayed_heap_.begin(), delayed_heap_.end(), DelayedTaskCompare());
+    delayed_heap_.pop_back();
+    delayed_tasks_.erase(top.task_->getId());
 
-    out.task = top.task_;
-    out.src = TaskCandidate::Source::Delayed;
-    out.id = top.task_->GetID();
-    out.delayed_copy = top;
+    out.task_ = top.task_;
+    out.src_ = TaskCandidate::Source::Delayed;
+    out.id_ = top.task_->getId();
+    out.delayed_copy_ = top;
     return true;
 }
-
-bool TaskScheduler::PopNextPeriodic(TaskCandidate& out) {
-    if (periodicHeap.empty()) return false;
-    if (!periodicHeap.front().IsTimeToRun()) return false;
-
-    auto top = periodicHeap.front();
-    std::pop_heap(periodicHeap.begin(), periodicHeap.end(), PeriodicTaskCompare());
-    periodicHeap.pop_back();
-    scheduledTasks.erase(top.task_->GetID());
-
-    out.task = top.task_;
-    out.src = TaskCandidate::Source::Periodic;
-    out.id = top.task_->GetID();
-    out.periodic_copy = top;
+bool TaskScheduler::popNextPeriodic(TaskCandidate& out) {
+    if (periodic_heap_.empty()) return false;
+    if (!periodic_heap_.front().isTimeToRun()) return false;
+    auto top = periodic_heap_.front();
+    std::pop_heap(periodic_heap_.begin(), periodic_heap_.end(), PeriodicTaskCompare());
+    periodic_heap_.pop_back();
+    scheduled_tasks_.erase(top.task_->getId());
+    out.task_ = top.task_;
+    out.src_ = TaskCandidate::Source::Periodic;
+    out.id_ = top.task_->getId();
+    out.periodic_copy_ = top;
     return true;
 }
-
-
-int TaskScheduler::PickWorkerForTask(const std::shared_ptr<BaseTask>& task) {
-    std::lock_guard<std::mutex> lock(taskMutex);
-    // Use core affinity if available
-    if (task->GetCoreAffinity() >= 2) {
-        return (task->GetCoreAffinity()-2) % workers.size();
+int TaskScheduler::pickWorkerForTask(const std::shared_ptr<BaseTask>& task) {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    if (task->getCoreAffinity() >= 2) {
+        return (task->getCoreAffinity()-2) % workers_.size();
     }
-    // Otherwise round-robin over all workers
-    return nextWorker.fetch_add(1) % workers.size();
+    return next_worker_.fetch_add(1) % workers_.size();
 }
-
-std::vector<TaskCandidate> TaskScheduler::GetNextBatch(size_t maxBatch)
+std::vector<TaskCandidate> TaskScheduler::getNextBatch(size_t maxBatch)
 {
-
-    std::lock_guard<std::mutex> lock(taskMutex);
+    std::lock_guard<std::mutex> lock(task_mutex_);
     std::vector<TaskCandidate> batch;
     batch.reserve(maxBatch);
-
-    // 1) fallback queue
-    while (!fallbackQueue.empty() && batch.size() < maxBatch) {
-        auto task = fallbackQueue.front();
-        fallbackQueue.pop();
-
-        if (!task) continue;
-        if (task->IsCancelled()) continue;
-        if (task->IsPaused()) {
-            fallbackQueue.push(task);
+    while (!fallback_queue_.empty() && batch.size() < maxBatch) {
+        auto task_ = fallback_queue_.front();
+        fallback_queue_.pop();
+        if (!task_) continue;
+        if (task_->isCancelled()) continue;
+        if (task_->isPaused()) {
+            fallback_queue_.push(task_);
             continue;
         }
         else
-            // Claim task immediately
-            if (!task->TryTake()) continue;
-
+            if (!task_->tryTake()) continue;
         batch.push_back({ 
-            task, 
+            task_, 
             TaskCandidate::Source::Fallback, 
             SIZE_MAX, 
             "" });
     }
-
-    // 2) priority bins
-    for (size_t bin_idx = 0; bin_idx < priorityBins.size() && batch.size() < maxBatch; ++bin_idx) {
-        auto& bin = priorityBins[bin_idx];
-        auto& mutex = priorityBinMutexes[bin_idx];
-
-        priorityBinMutexes[bin_idx]->lock();
+    for (size_t bin_idx = 0; bin_idx < priority_bins_.size() && batch.size() < maxBatch; ++bin_idx) {
+        auto& bin = priority_bins_[bin_idx];
+        auto& mutex = priority_bin_mutexes_[bin_idx];
+        priority_bin_mutexes_[bin_idx]->lock();
         while (!bin.empty() && batch.size() < maxBatch) {
             std::pop_heap(bin.begin(), bin.end(), PriorityCompare());
-            auto task = bin.back();
+            auto task_ = bin.back();
             bin.pop_back();
-
-            if (!task || task->IsCancelled()) continue;
-
-            // Claim task immediately
-            if (!task->TryTake()) continue;
-
-            batch.push_back({ task, TaskCandidate::Source::PriorityBin, bin_idx, "" });
+            if (!task_ || task_->isCancelled()) continue;
+            if (!task_->tryTake()) continue;
+            batch.push_back({ task_, TaskCandidate::Source::PriorityBin, bin_idx, "" });
         }
-        priorityBinMutexes[bin_idx]->unlock();
+        priority_bin_mutexes_[bin_idx]->unlock();
     }
-    // 3) delayed heap
-    while (batch.size() < maxBatch && !delayedHeap.empty()) {
-        auto& top = delayedHeap.front();
-        if (!top.IsTimeToRun()) break;
-
+    while (batch.size() < maxBatch && !delayed_heap_.empty()) {
+        auto& top = delayed_heap_.front();
+        if (!top.isTimeToRun()) break;
         DelayedTask snapshot = top;
-        std::pop_heap(delayedHeap.begin(), delayedHeap.end(), DelayedTaskCompare());
-        delayedHeap.pop_back();
-
-        auto task = snapshot.task_;
-        if (!task) continue;
-        if (task->IsCancelled()) continue;
-        if (task->IsPaused()) {
-            PushDelayed(snapshot);
+        std::pop_heap(delayed_heap_.begin(), delayed_heap_.end(), DelayedTaskCompare());
+        delayed_heap_.pop_back();
+        auto task_ = snapshot.task_;
+        if (!task_) continue;
+        if (task_->isCancelled()) continue;
+        if (task_->isPaused()) {
+            pushDelayed(snapshot);
             continue;
         }
         else
-            // Claim task immediately
-            if (!task->TryTake()) continue;
-
-        delayedTasks.erase(task->GetID());
+            if (!task_->tryTake()) continue;
+        delayed_tasks_.erase(task_->getId());
         TaskCandidate c;
-        c.task = task;
-        c.src = TaskCandidate::Source::Delayed;
-        c.id = task->GetID();
-        c.delayed_copy = std::move(snapshot);
+        c.task_ = task_;
+        c.src_ = TaskCandidate::Source::Delayed;
+        c.id_ = task_->getId();
+        c.delayed_copy_ = std::move(snapshot);
         batch.push_back(std::move(c));
     }
-
-    // 4) periodic heap
-    while (batch.size() < maxBatch && !periodicHeap.empty()) {
-        auto& top = periodicHeap.front();
-        if (!top.IsTimeToRun()) break;
-
+    while (batch.size() < maxBatch && !periodic_heap_.empty()) {
+        auto& top = periodic_heap_.front();
+        if (!top.isTimeToRun()) break;
         PeriodicTask snapshot = top;
-        std::pop_heap(periodicHeap.begin(), periodicHeap.end(), PeriodicTaskCompare());
-        periodicHeap.pop_back();
-
-        auto task = snapshot.task_;
-        if (!task) continue;
-        if (task->IsCancelled()) continue;
-        if (task->IsPaused()) {
-            PushPeriodic(snapshot);
+        std::pop_heap(periodic_heap_.begin(), periodic_heap_.end(), PeriodicTaskCompare());
+        periodic_heap_.pop_back();
+        auto task_ = snapshot.task_;
+        if (!task_) continue;
+        if (task_->isCancelled()) continue;
+        if (task_->isPaused()) {
+            pushPeriodic(snapshot);
             continue;
         }
         else
-            // Claim task immediately
-            if (!task->TryTake()) continue;
-
-        scheduledTasks.erase(task->GetID());
+            if (!task_->tryTake()) continue;
+        scheduled_tasks_.erase(task_->getId());
         TaskCandidate c;
-        c.task = task;
-        c.src = TaskCandidate::Source::Periodic;
-        c.id = task->GetID();
-        c.periodic_copy = std::move(snapshot);
+        c.task_ = task_;
+        c.src_ = TaskCandidate::Source::Periodic;
+        c.id_ = task_->getId();
+        c.periodic_copy_ = std::move(snapshot);
         batch.push_back(std::move(c));
     }
-
     return batch;
 }
-
-
-// Modified Worker() to use batching and dispatch
-void TaskScheduler::Worker() {
-    clock->Reset();
+void TaskScheduler::worker() {
+    clock_->reset();
     const size_t batchSize = 8;
 
-    while (!stopFlag.load(std::memory_order_acquire)) {
-        // --- Phase A: Gather candidates ---
-        auto candidates = GetNextBatch(batchSize);
+    while (!stop_flag_.load(std::memory_order_acquire)) {
+        auto candidates = getNextBatch(batchSize);
 
         if (candidates.empty()) {
-            std::unique_lock<std::mutex> lock(workerMutex);
-            cv.wait(lock, [this]() {
-                return stopFlag.load(std::memory_order_acquire) || AnyTaskReady();
+            std::unique_lock<std::mutex> lock(worker_mutex_);
+            cv_.wait(lock, [this]() {
+                return stop_flag_.load(std::memory_order_acquire) || anyTaskReady();
                 });
             continue;
         }
-
-        // --- Phase B: Dispatch claimed tasks to workers ---
         for (auto& c : candidates) {
-            if (!c.task) continue;
-
-            // Handle paused tasks — reinsert where they came from
-            if (c.task->IsPaused()) {
-                std::lock_guard<std::mutex> lock(taskMutex);
-                switch (c.src) {
+            if (!c.task_) continue;
+            if (c.task_->isPaused()) {
+                std::lock_guard<std::mutex> lock(task_mutex_);
+                switch (c.src_) {
                 case TaskCandidate::Source::PriorityBin:
-                    if (c.bin_index < priorityBins.size())
-                        priorityBins[c.bin_index].push_back(c.task);
+                    if (c.bin_index_ < priority_bins_.size())
+                        priority_bins_[c.bin_index_].push_back(c.task_);
                     else
-                        fallbackQueue.push(c.task);
+                        fallback_queue_.push(c.task_);
                     break;
                 case TaskCandidate::Source::Fallback:
-                    fallbackQueue.push(c.task);
+                    fallback_queue_.push(c.task_);
                     break;
                 case TaskCandidate::Source::Delayed:
-                    if (c.delayed_copy) PushDelayed(*c.delayed_copy);
+                    if (c.delayed_copy_) pushDelayed(*c.delayed_copy_);
                     break;
                 case TaskCandidate::Source::Periodic:
-                    if (c.periodic_copy) PushPeriodic(*c.periodic_copy);
+                    if (c.periodic_copy_) pushPeriodic(*c.periodic_copy_);
                     break;
                 default: break;
                 }
                 continue;
             }
-
-            // Already claimed, push to worker
-            auto& task = c.task;
-            int workerIndex = PickWorkerForTask(task);
-            if (workers.empty() || queues.empty()) {
-                std::lock_guard<std::mutex> lock(taskMutex);
-                fallbackQueue.push(task);
+            auto& task_ = c.task_;
+            int workerIndex = pickWorkerForTask(task_);
+            if (workers_.empty() || queues_.empty()) {
+                std::lock_guard<std::mutex> lock(task_mutex_);
+                fallback_queue_.push(task_);
                 continue;
             }
-
-            if (!queues[workerIndex]->push_bottom(task)) {
-                int fallback = nextWorker.fetch_add(1) % queues.size();
-                if (!queues[fallback]->push_bottom(task)) {
-                    std::lock_guard<std::mutex> lock(taskMutex);
-                    fallbackQueue.push(task);
+            if (!queues_[workerIndex]->push_bottom(task_)) {
+                int fallback = next_worker_.fetch_add(1) % queues_.size();
+                if (!queues_[fallback]->push_bottom(task_)) {
+                    std::lock_guard<std::mutex> lock(task_mutex_);
+                    fallback_queue_.push(task_);
                     continue;
                 }
                 else {
-                    workers[fallback]->NotifyWorker();
+                    workers_[fallback]->notifyWorker();
                 }
             }
             else {
-                workers[workerIndex]->NotifyWorker();
+                workers_[workerIndex]->notifyWorker();
             }
-
-            // Post-dispatch reinsertion for periodic tasks
-            if (c.src == TaskCandidate::Source::Periodic && c.periodic_copy) {
-                PeriodicTask next = *c.periodic_copy;
-
-                if (next.task_->IsCancelled()) continue;
-
-                next.UpdateExecutionTime();
-                std::lock_guard<std::mutex> lock(taskMutex);
-                PushPeriodic(next);
+            if (c.src_ == TaskCandidate::Source::Periodic && c.periodic_copy_) {
+                PeriodicTask next = *c.periodic_copy_;
+                if (next.task_->isCancelled()) continue;
+                next.updateExecutionTime();
+                std::lock_guard<std::mutex> lock(task_mutex_);
+                pushPeriodic(next);
             }
         }
     }
 }
 
-
-
-
-//check if any task is ready
-bool TaskScheduler::AnyTaskReady() {
-    std::lock_guard<std::mutex> lock(taskMutex);
-    // 1. Check priority bins
-    for (const auto& bin : priorityBins) {
+bool TaskScheduler::anyTaskReady() {
+    std::lock_guard<std::mutex> lock(task_mutex_);
+    for (const auto& bin : priority_bins_) {
         if (!bin.size() == 0) return true;
     }
-    // 2. Check delayed tasks
-    if (!delayedTasks.empty()) return true;
-    // 3. Check periodic tasks
-    if (!scheduledTasks.empty()) return true;
-
+    if (!delayed_tasks_.empty()) return true;
+    if (!scheduled_tasks_.empty()) return true;
     return false;
 }
 

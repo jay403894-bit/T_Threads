@@ -1,172 +1,130 @@
 #include "T_Thread.h"
 #include <iostream>
-std::mutex T_Thread::affinityMutex;
+std::mutex T_Thread::affinity_mutex_;
 
-//constructor
 T_Thread::T_Thread(){
 }
-//destructor
 T_Thread::~T_Thread() {
 }
-void T_Thread::StartWorker(int cpuAffinity)
+void T_Thread::startWorker(int cpu_affinity)
 {
-
-	auto ready = std::make_shared<std::atomic<bool>>(false);
-
-	t_thread = std::thread([this, ready]() { // <-- capture by value
-		while (!ready->load(std::memory_order_acquire)) std::this_thread::yield();
-		this->Worker();
+	auto ready_ = std::make_shared<std::atomic<bool>>(false);
+	thread_ = std::thread([this, ready_]() {
+		while (!ready_->load(std::memory_order_acquire)) std::this_thread::yield();
+		this->worker();
 		});
-	nativeHandle = t_thread.native_handle();
-	// set affinity
+	native_handle_ = thread_.native_handle();
 #ifdef _WIN32
-	DWORD_PTR mask = 1ULL << cpuAffinity;
-	SetThreadAffinityMask(nativeHandle, mask);
+	DWORD_PTR mask_ = 1ULL << cpu_affinity;
+	SetThreadAffinityMask(native_handle_, mask_);
 #endif
-
-	// signal the thread it can start
-	ready->store(true, std::memory_order_release);
+	ready_->store(true, std::memory_order_release);
 };
-
-//get the thread id
-std::thread::id T_Thread::GetID() {
-	return t_thread.get_id();
+std::thread::id T_Thread::getId() {
+	return thread_.get_id();
 }
-
-//set the task
-bool T_Thread::SetTask(const std::shared_ptr<BaseTask>& newTask) {
-	if (!newTask) return false;
+bool T_Thread::setTask(const std::shared_ptr<BaseTask>& new_task) {
+	if (!new_task) return false;
 	{
-		std::lock_guard<std::mutex> lock(threadMutex);
+		std::lock_guard<std::mutex> lock(thread_mutex_);
 		if (!task_) {
 			return false;
 		}
-		task_ = newTask;
+		task_ = new_task;
 	}
-	cv.notify_one();
+	cv_.notify_one();
 	return true;
 }
-
-void T_Thread::SetQueueIndex(int index)
+void T_Thread::setQueueIndex(int index)
 {
-	std::lock_guard<std::mutex> lock(threadMutex);
-	queueIndex = index;
+	std::lock_guard<std::mutex> lock(thread_mutex_);
+	queue_index_ = index;
 };
-
-//explicit join
-void T_Thread::Join() {
-	// avoid concurrent Join()
+void T_Thread::join() {
 	bool expected = false;
-	if (!joining.compare_exchange_strong(expected, true)) {
+	if (!joining_.compare_exchange_strong(expected, true)) {
 		return;
 	}
-	// request stop and wake worker
 	{
-		std::lock_guard<std::mutex> lock(threadMutex);
-		running.store(false, std::memory_order_release);
+		std::lock_guard<std::mutex> lock(thread_mutex_);
+		running_.store(false, std::memory_order_release);
 	}
-	cv.notify_one();
-
-	// bounded wait for running flag to clear (worker exit)
-	const int timeoutMs = 5000;
-	std::unique_lock<std::mutex> lock(joinMutex);
-	cvWorkerDone.wait_for(lock, std::chrono::milliseconds(timeoutMs),
-		[this] { return !running.load(std::memory_order_acquire); });
-
-
-
-	// move thread out under lock, then join outside
-	std::thread localThread;
+	cv_.notify_one();
+	const int timeout_ms = 5000;
+	std::unique_lock<std::mutex> lock(join_mutex_);
+	cv_worker_done_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+		[this] { return !running_.load(std::memory_order_acquire); });
+	std::thread local_thread;
 	{
-		std::lock_guard<std::mutex> lock(threadMutex);
-		if (t_thread.joinable()) {
-			localThread = std::move(t_thread);
+		std::lock_guard<std::mutex> lock(thread_mutex_);
+		if (thread_.joinable()) {
+			local_thread = std::move(thread_);
 		}
 		else {
-			joining.store(false, std::memory_order_release);
+			joining_.store(false, std::memory_order_release);
 			return;
 		}
 	}
-	if (localThread.joinable()) {
-		localThread.join();
+	if (local_thread.joinable()) {
+		local_thread.join();
 	}
-	joining.store(false, std::memory_order_release);
+	joining_.store(false, std::memory_order_release);
 }
-
-
-void T_Thread::NotifyWorker()
+void T_Thread::notifyWorker()
 {
-	std::lock_guard<std::mutex> lock(threadMutex);
-	cv.notify_one();
+	std::lock_guard<std::mutex> lock(thread_mutex_);
+	cv_.notify_one();
 }
-//set cpu affinity
 #ifdef _WIN32
-bool T_Thread::SetAffinity(int cpuID, std::vector<int>& coreOccupied, int numCores)
+bool T_Thread::setAffinity(int cpu_id, std::vector<int>& core_occupied_, int num_cores_)
 {
-	if (cpuID == -1)
+	if (cpu_id == -1)
 		return true;
-	if (cpuID < 0 || cpuID >= numCores)
+	if (cpu_id < 0 || cpu_id >= num_cores_)
 		return false;
-
-	std::lock_guard<std::mutex> guard(affinityMutex);
-
-	if (coreOccupied[cpuID] != 0) {
-		// already occupied
+	std::lock_guard<std::mutex> guard(affinity_mutex_);
+	if (core_occupied_[cpu_id] != 0) {
 		return false;
 	}
-
-	// mark as occupied
-	coreOccupied[cpuID] = 1;
-
-	mask = 1ULL << cpuID;
-	DWORD_PTR result = SetThreadAffinityMask(nativeHandle, mask);
+	core_occupied_[cpu_id] = 1;
+	mask_ = 1ULL << cpu_id;
+	DWORD_PTR result = SetThreadAffinityMask(native_handle_, mask_);
 	if (result != 0) {
 		return true;
 	}
-
-	// failed to set OS affinity — revert
-	coreOccupied[cpuID] = 0;
+	core_occupied_[cpu_id] = 0;
 	return false;
 }
 #else
  //implement posix later
 #endif
-//t_thread pools the thread as a Worker awaiting orders
-void T_Thread::Worker() {
-	running.store(true, std::memory_order_release);
-	while (running.load(std::memory_order_acquire)) {
-		std::shared_ptr<BaseTask> task;
-
-		// First, try to get a task from our own queue
+void T_Thread::worker() {
+	running_.store(true, std::memory_order_release);
+	while (running_.load(std::memory_order_acquire)) {
+		std::shared_ptr<BaseTask> task_;
 		{
-			std::unique_lock<std::mutex> lock(workerMutex);
-			cv.wait(lock, [this]() {
-				return !running.load(std::memory_order_acquire) || !queues[queueIndex]->empty();
+			std::unique_lock<std::mutex> lock(worker_mutex_);
+			cv_.wait(lock, [this]() {
+				return !running_.load(std::memory_order_acquire) || !queues_[queue_index_]->empty();
 				});
-
-			if (!running.load(std::memory_order_acquire)) break;
-
-			auto opt = queues[queueIndex]->pop_bottom();
-			if (opt) task = *opt;
+			if (!running_.load(std::memory_order_acquire)) break;
+			auto opt = queues_[queue_index_]->pop_bottom();
+			if (opt) task_ = *opt;
 		}
-
-		// If own queue empty, try stealing from others
-		if (!task) {
-			size_t numQueues = queues.size();
+		if (!task_) {
+			size_t numQueues = queues_.size();
 			for (size_t i = 0; i < numQueues; ++i) {
-				if (i == queueIndex) continue; // skip self
-				auto opt = queues[i]->steal();
+				if (i == queue_index_) continue;
+				auto opt = queues_[i]->steal();
 				if (opt) {
-					task = *opt;
+					task_ = *opt;
 					break;
 				}
 			}
 		}
-
-		if (!task) continue; // nothing to do, loop again
-
-		task->Execute();
-		task->SetCompleted();
+		if (!task_) continue; 
+		task_->execute();
+		task_->setCompleted();
 	}
-	running.store(false, std::memory_order_release);
+	running_.store(false, std::memory_order_release);
 }

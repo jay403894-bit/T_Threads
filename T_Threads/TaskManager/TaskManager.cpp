@@ -1,8 +1,8 @@
 #include "TaskManager.h"
 
-/// a listener for Event
+/// a listener_ for Event
 class TestListener : public Listener {
-    void on_event_triggered() override {
+    void onEventTriggered() override {
       
     }
 };
@@ -11,110 +11,115 @@ TaskManager::TaskManager() {
     task_scheduler_ = std::make_shared<TaskScheduler>();
 }
 
-void TaskManager::AddTask(const std::shared_ptr<BaseTask>& task, int cpuID, 
-    const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& depA, 
-    const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& depB)
+void TaskManager::callback_(std::shared_ptr<BaseTask> t)
 {
-    auto scheduler = task_scheduler_;
-    task->SetCoreAffinity(cpuID);
+    task_scheduler_->addTask(t);
+}
+
+void TaskManager::addTask(const std::shared_ptr<BaseTask>& task_, int cpu_id, 
+    const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& dep_a_, 
+    const std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>>& dep_b_)
+{
+    auto scheduler_ = task_scheduler_;
+    task_->setCoreAffinity(cpu_id);
 
     // Determine dependency mode first so we can pass it into the TaskNode ctor.
     DependencyType mode = DependencyType::AND;
-    if (depA && depB) mode = DependencyType::OR;
+    if (dep_a_ && dep_b_) mode = DependencyType::OR;
 
-    // Create the node for this task (pass mode)
+    // Create the node for this task_ (pass mode)
     auto taskNode = std::make_shared<TaskNode>(
-        task,
-        // call scheduler->AddTask with cpuID (matches scheduler signature)
-        [scheduler, cpuID](std::shared_ptr<BaseTask> t) {
-            if (scheduler) scheduler->AddTask(t, cpuID);
+        task_,
+        // call scheduler_->addTask with cpu_id (matches scheduler_ signature)
+        [scheduler_, cpu_id](std::shared_ptr<BaseTask> t) {
+            if (scheduler_) scheduler_->addTask(t, cpu_id);
         },
         mode
     );
 
-    // Safely initialize listener
-    taskNode->Initialize();
+    // Safely initialize listener_
+    taskNode->initialize();
 
-    // Attach depA
-    if (depA) {
-        for (auto& depTask : *depA) {
+    // Attach dep_a_
+    if (dep_a_) {
+        for (auto& depTask : *dep_a_) {
             if (!depTask) continue;
             auto depNode = std::make_shared<TaskNode>(
                 depTask,
-                [scheduler, cpuID](std::shared_ptr<BaseTask> t) {
-                    if (scheduler) scheduler->AddTask(t, cpuID);
+                [scheduler_, cpu_id](std::shared_ptr<BaseTask> t) {
+                    if (scheduler_) scheduler_->addTask(t, cpu_id);
                 },
                 mode
             );
-            depNode->Initialize();
-            taskNode->AddDependencyA(depNode);
+            depNode->initialize();
+            taskNode->addDependencyA(depNode);
         }
     }
-    //attach depB
-    else if (depB) {
-        for (auto& depTask : *depB) {
+    //attach dep_b_
+    else if (dep_b_) {
+        for (auto& depTask : *dep_b_) {
             if (!depTask) continue;
             auto depNode = std::make_shared<TaskNode>(
                 depTask,
-                [scheduler, cpuID](std::shared_ptr<BaseTask> t) {
-                    if (scheduler) scheduler->AddTask(t, cpuID);
+                [scheduler_, cpu_id](std::shared_ptr<BaseTask> t) {
+                    if (scheduler_) scheduler_->addTask(t, cpu_id);
                 },
                 mode
             );
-            depNode->Initialize();
-            taskNode->AddDependencyB(depNode);
+            depNode->initialize();
+            taskNode->addDependencyB(depNode);
         }
     }
 
-    // If ready to go now (no deps), execute directly
-    if (taskNode->IsCompleted() || taskNode->GetRemainingDependencies() == 0) {
-        taskNode->Execute();
+    // If ready_ to go now (no deps), execute directly
+    if (taskNode->isCompleted() || taskNode->getRemainingDependencies() == 0) {
+        taskNode->execute();
     }
 }
 
-void TaskManager::ScheduleTask(const std::shared_ptr<BaseTask>& task, float interval, int cpuID)
+void TaskManager::scheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpu_id)
 {
-    task_scheduler_->ScheduleTask(task, interval, cpuID);
+    task_scheduler_->scheduleTask(task_, interval, cpu_id);
 }
-void TaskManager::ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS, int cpuID)
+void TaskManager::scheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delay_ms, int cpu_id)
 {
-    task_scheduler_->ScheduleDelayedTask(task, delayMS, cpuID);
+    task_scheduler_->scheduleDelayedTask(task_, delay_ms, cpu_id);
 }
-void TaskManager::StopTask(const std::string& taskID)
+void TaskManager::stopTask(const std::string& task_id)
 {
-    task_scheduler_->StopTask(taskID);
+    task_scheduler_->stopTask(task_id);
 }
 
-void TaskManager::PauseTask(const std::string& taskID)
+void TaskManager::pauseTask(const std::string& task_id)
 {
-    task_scheduler_->PauseTask(taskID);
+    task_scheduler_->pauseTask(task_id);
 }
-void TaskManager::ResumeTask(const std::string& taskID)
+void TaskManager::resumeTask(const std::string& task_id)
 {
-    task_scheduler_->ResumeTask(taskID);
+    task_scheduler_->resumeTask(task_id);
 }
-void TaskManager::EnqueueToMain(const std::shared_ptr<BaseTask>& task)
+void TaskManager::enqueueToMain(const std::shared_ptr<BaseTask>& task)
 {
-    queue.push(task);
+    queue_.push(task);
 }
-void TaskManager::Join()
+void TaskManager::join()
 {
     if (task_scheduler_) 
     {
-        task_scheduler_->Join();
+        task_scheduler_->join();
     }
 }
 
-void TaskManager::ProcessMainThreadTasks()
+void TaskManager::processMainThreadTasks()
 {
-    while (auto wrapper = queue.pop()) {
+    while (auto wrapper = queue_.pop()) {
         if (!wrapper) continue;
         std::shared_ptr<BaseTask> taskPtr = *wrapper; 
-        if (taskPtr) taskPtr->Execute();
+        if (taskPtr) taskPtr->execute();
     }
 }
 
-std::string TaskManager::TimeStamp() 
+std::string TaskManager::timeStamp() 
 {
-    return task_scheduler_ ? task_scheduler_->TimeStamp() : "";
+    return task_scheduler_ ? task_scheduler_->timeStamp() : "";
 }

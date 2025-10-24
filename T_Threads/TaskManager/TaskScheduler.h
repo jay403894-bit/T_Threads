@@ -1,142 +1,111 @@
 #pragma once
 #define NOMINMAX
-#include <list>
 #include <thread>
 #include <condition_variable>
 #include <vector>
 #include <mutex>
 #include <queue>
 #include <algorithm>
-#include <unordered_set>
 #include "T_Thread.h"
 #include "TaskQueue.h"
 #include "Task.h"
 #include "../Utilities/Clock.h"
 
-constexpr size_t MAX_PRIORITY_BINS = 8; // or whatever your maximum is
+constexpr size_t MAX_PRIORITY_BINS = 8;
 
-//a periodic task_ 
 struct PeriodicTask {
-    std::shared_ptr<BaseTask> task_; //task pointer
-    float scheduledTime;  // When to run the task_ next (in seconds)
-    float interval;             // Interval in seconds
-    std::shared_ptr<Clock> clock;  // Pointer to the clock
-    bool cancelled = false; //task canceled flag
+    std::shared_ptr<BaseTask> task_; 
+    float scheduledTime;  
+    float interval;             
+    std::shared_ptr<Clock> clock_;  
+    bool cancelled_ = false; 
     PriorityLevel priority_ = PriorityLevel::NORMAL;
-    // Default constructor
     PeriodicTask();
-    // Parameterized constructor for initializing the task_ with interval and game timer
     PeriodicTask(const std::shared_ptr<BaseTask>& task_, float interval_, const std::shared_ptr<Clock>& timer);
-    // Check if it's time to run the task_ based on TotalTime and interval
-    bool IsTimeToRun() const;
-    // Update the next execution time
-    void UpdateExecutionTime();
+    bool isTimeToRun() const;
+    void updateExecutionTime();
 };
 struct DelayedTask {
-    std::shared_ptr<BaseTask> task_; //task pointer
-    float scheduledTime; //the scheduled delay time
-    std::shared_ptr<Clock> clock; //pointer to the clock
-    bool executed = false; //executed flag
+    std::shared_ptr<BaseTask> task_; 
+    float scheduledTime; 
+    std::shared_ptr<Clock> clock_; 
+    bool executed = false; 
     PriorityLevel priority_ = PriorityLevel::NORMAL;
-    //default constructor
     DelayedTask();
-    // Constructor for a delayed / one-shot task
-    DelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS, const std::shared_ptr<Clock>& timer)
-        : task_(task), clock(timer) {
-        scheduledTime = clock->ElapsedMS() + delayMS;
+    DelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS, const std::shared_ptr<Clock>& timer)
+        : task_(task_), clock_(timer) {
+        scheduledTime = clock_->elapsedMs() + delayMS;
     }
-    // Returns true if it’s time to run the task
-    bool IsTimeToRun() const {
-        return !executed && (clock->ElapsedMS() >= scheduledTime);
+    bool isTimeToRun() const {
+        return !executed && (clock_->elapsedMs() >= scheduledTime);
     }
-    //mark task executed
-    void MarkExecuted() { executed = true; }
+    void markExecuted() { executed = true; }
 };
 
 struct DelayedTaskCompare {
     bool operator()(const DelayedTask& a, const DelayedTask& b) const {
-        return a.scheduledTime > b.scheduledTime; // min-heap: top = earliest time
+        return a.scheduledTime > b.scheduledTime; 
     }
 };
 struct PeriodicTaskCompare {
     bool operator()(const PeriodicTask& a, const PeriodicTask& b) const {
-        return a.scheduledTime > b.scheduledTime; // min-heap
+        return a.scheduledTime > b.scheduledTime; 
     }
 };
 struct PriorityCompare {
     bool operator()(const std::shared_ptr<BaseTask>& a,
         const std::shared_ptr<BaseTask>& b) const {
-        return a->GetPriority() > b->GetPriority(); // min-heap
+        return a->getPriority() > b->getPriority(); 
     }
 };
-
 struct TaskCandidate {
-    std::shared_ptr<BaseTask> task;                                 // raw pointer cached
-    enum class Source { None, PriorityBin, Delayed, Periodic, Fallback } src;
-    size_t bin_index;
-    std::string id;
-    std::optional<DelayedTask> delayed_copy;
-    std::optional<PeriodicTask> periodic_copy;
+    std::shared_ptr<BaseTask> task_;                                 
+    enum class Source { None, PriorityBin, Delayed, Periodic, Fallback } src_;
+    size_t bin_index_;
+    std::string id_;
+    std::optional<DelayedTask> delayed_copy_;
+    std::optional<PeriodicTask> periodic_copy_;
 };
 class TaskScheduler : public SharedQueues {
 public:
-
-
-    // Constructor 
     TaskScheduler();
-    //destructor 
     ~TaskScheduler();
-    //add a task_
-    void AddTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1);
-    // Add a periodic task_ that executes at fixed intervals
-    void ScheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1);
-    //add a delayed task
-    void ScheduleDelayedTask(const std::shared_ptr<BaseTask>& task, float delayMS,int cpuID = -1);
-    //stop all threads and join the pool
-    void Join();
-    //stop a task_
-    void StopTask(const std::string& id);
-    //pause a task_
-    void PauseTask(std::string id);
-    //Resume a task_
-    void ResumeTask(std::string id);
-    //get the clock
-    std::string TimeStamp();
-    //start the thread pool
-    void StartPool(unsigned int numWorkers=0);
+    void addTask(const std::shared_ptr<BaseTask>& task_, int cpuID = -1);
+    void scheduleTask(const std::shared_ptr<BaseTask>& task_, float interval, int cpuID = -1);
+    void scheduleDelayedTask(const std::shared_ptr<BaseTask>& task_, float delayMS,int cpuID = -1);
+    void join();
+    void stopTask(const std::string& id_);
+    void pauseTask(std::string id_);
+    void resumeTask(std::string id_);
+    std::string timeStamp();
+    void startPool(unsigned int numWorkers=0);
 private:
-    void PushDelayed(const DelayedTask& t);
-    void PushPeriodic(const PeriodicTask& t);
-    bool PopNextDelayed(TaskCandidate& out);
-    bool PopNextPeriodic(TaskCandidate& out);
-    int PickWorkerForTask(const std::shared_ptr<BaseTask>& task); // Choose queue index
-    std::vector<TaskCandidate> GetNextBatch(size_t maxBatch);
-    //worker loop
-    void Worker();
-    //check if any task is ready
-    bool AnyTaskReady();
-    //get the next task
-    std::shared_ptr<BaseTask> GetNextTask();
-    std::atomic<int> nextWorker{ 0 }; // for round-robin
-    std::vector<std::shared_ptr<T_Thread>> workers; // indexable
-    std::vector<DelayedTask> delayedHeap;
-    std::vector<PeriodicTask> periodicHeap;
-    std::vector<std::vector<std::shared_ptr<BaseTask>>> priorityBins;
+    void pushDelayed(const DelayedTask& t);
+    void pushPeriodic(const PeriodicTask& t);
+    bool popNextDelayed(TaskCandidate& out);
+    bool popNextPeriodic(TaskCandidate& out);
+    int pickWorkerForTask(const std::shared_ptr<BaseTask>& task_);
+    std::vector<TaskCandidate> getNextBatch(size_t maxBatch);
+    void worker();
+    bool anyTaskReady();   
 
-    std::unordered_map<std::string, PeriodicTask> scheduledTasks; //scheduled tasks mapped
-    std::unordered_map<std::string, DelayedTask> delayedTasks; //delayed tasks mapped
-    std::shared_ptr<Clock> clock;  // Add clock to track time
-    std::mutex taskMutex; //task mutex
-    std::condition_variable cv; // Condition variable for thread synchronization
-    std::atomic<bool> stopFlag = false; // stop flag 
-    std::thread workerThread; // Worker thread
-    inline static bool constructed = false; //constructed flag to ensure singleton like behavior without the pattern
-
-    std::vector<int> coreOccupied;
-    std::mutex workerMutex;
-    unsigned int numCores = 0;
-    std::atomic<int> nextIndex{ -1 };
-    std::queue<std::shared_ptr<BaseTask>> fallbackQueue;
-    std::unordered_map<std::string, std::shared_ptr<BaseTask>> allTasks;
-    std::unique_ptr<std::mutex> priorityBinMutexes[MAX_PRIORITY_BINS];
+    inline static bool constructed_ = false; 
+    std::atomic<int> next_worker_{ 0 }; 
+    std::atomic<bool> stop_flag_ = false; 
+    std::atomic<int> next_index_{ -1 };
+    std::vector<std::shared_ptr<T_Thread>> workers_; 
+    std::vector<DelayedTask> delayed_heap_;
+    std::vector<PeriodicTask> periodic_heap_;
+    std::vector<std::vector<std::shared_ptr<BaseTask>>> priority_bins_;
+    std::vector<int> core_occupied_;
+    std::queue<std::shared_ptr<BaseTask>> fallback_queue_;
+    std::unordered_map<std::string, PeriodicTask> scheduled_tasks_; 
+    std::unordered_map<std::string, DelayedTask> delayed_tasks_;
+    std::unordered_map<std::string, std::shared_ptr<BaseTask>> task_map_;
+    std::shared_ptr<Clock> clock_;
+    std::condition_variable cv_;
+    std::thread worker_thread_; 
+    std::mutex task_mutex_; 
+    std::mutex worker_mutex_;
+    std::unique_ptr<std::mutex> priority_bin_mutexes_[MAX_PRIORITY_BINS];
 };

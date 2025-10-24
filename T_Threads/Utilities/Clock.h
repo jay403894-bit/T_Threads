@@ -12,15 +12,10 @@ class Clock
 {
 public:
     Clock();
-
-    void Reset();
-    // Returns elapsed milliseconds since last Reset()
-    double ElapsedMS() const;
-    // Returns elapsed seconds (as double)
-    double Elapsed() const;
-
-    // Human-readable time string (HH:MM:SS.MS)
-    std::string ToString() const;
+    void reset();
+    double elapsedMs() const;
+    double elapsed() const;
+    std::string toString() const;
 
 private:
     LARGE_INTEGER start{};
