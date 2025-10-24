@@ -51,6 +51,9 @@
     <ClCompile Include="TaskManager\Task.cpp">
       <Filter>Source Files\TaskManager</Filter>
     </ClCompile>
+    <ClCompile Include="TaskManager\TaskNode.cpp">
+      <Filter>Source Files\TaskManager</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="TaskManager\Event.hpp">

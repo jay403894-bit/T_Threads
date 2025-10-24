@@ -136,6 +136,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="TaskManager\Task.cpp" />
     <ClCompile Include="TaskManager\TaskManager.cpp" />
+    <ClCompile Include="TaskManager\TaskNode.cpp" />
     <ClCompile Include="TaskManager\TaskScheduler.cpp" />
     <ClCompile Include="TaskManager\T_Thread.cpp" />
     <ClCompile Include="Utilities\Clock.cpp" />
