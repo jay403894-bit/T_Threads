@@ -18,10 +18,10 @@ void PeriodicTask::updateExecutionTime() {
     scheduledTime = clock_->elapsedMs() + interval;
 }
 TaskScheduler::TaskScheduler() {
-    if (constructed_) {
+    if (constructed_.load(std::memory_order_acquire)) {
         throw std::runtime_error("Only one TaskScheduler allowed!");
     }
-    constructed_ = true;
+    constructed_.store(true,std::memory_order_release);
     clock_ = std::make_shared<Clock>();
     startPool();
 }
@@ -118,7 +118,7 @@ void TaskScheduler::resumeTask(std::string id) {
 }
 std::string TaskScheduler::timeStamp() { return clock_->toString(); }
 void TaskScheduler::startPool(unsigned int num_workers) {
-    if (constructed_ == false) {  }
+    if (!constructed_.load(std::memory_order_acquire)) {}
     size_t levels = static_cast<size_t>(PriorityLevel::BLOCKED) + 1;
     priority_bins_.clear();
     priority_bins_.resize(levels);
@@ -153,7 +153,7 @@ void TaskScheduler::startPool(unsigned int num_workers) {
     SetThreadAffinityMask(worker_thread_.native_handle(), mask_);
 #endif
     ready_->store(true, std::memory_order_release);
-    constructed_ = true;
+    constructed_.store(true,std::memory_order_release);
 }
 void TaskScheduler::pushDelayed(const DelayedTask& t) {
     delayed_heap_.push_back(t);
@@ -285,10 +285,8 @@ std::vector<TaskCandidate> TaskScheduler::getNextBatch(size_t maxBatch)
 void TaskScheduler::worker() {
     clock_->reset();
     const size_t batchSize = 8;
-
     while (!stop_flag_.load(std::memory_order_acquire)) {
         auto candidates = getNextBatch(batchSize);
-
         if (candidates.empty()) {
             std::unique_lock<std::mutex> lock(worker_mutex_);
             cv_.wait(lock, [this]() {
@@ -361,8 +359,3 @@ bool TaskScheduler::anyTaskReady() {
     if (!scheduled_tasks_.empty()) return true;
     return false;
 }
-
-
-
-
-

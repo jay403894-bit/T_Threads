@@ -89,7 +89,7 @@ private:
     void worker();
     bool anyTaskReady();   
 
-    inline static bool constructed_ = false; 
+    inline static std::atomic<bool> constructed_{ false };
     std::atomic<int> next_worker_{ 0 }; 
     std::atomic<bool> stop_flag_ = false; 
     std::atomic<int> next_index_{ -1 };

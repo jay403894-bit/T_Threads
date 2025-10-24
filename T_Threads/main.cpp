@@ -1,11 +1,10 @@
-#include <iostream>        // cout, endl
-#include <vector>          // vector
-#include <memory>          // shared_ptr, make_shared
-#include <functional>      // function, lambdas
-#include <atomic>          // atomic<int>
-#include <thread>          // this_thread::sleep_for, hardware_concurrency
-#include <cmath>           // sqrt
-
+#include <iostream>        
+#include <vector>          
+#include <memory>          
+#include <functional>      
+#include <atomic>         
+#include <thread>         
+#include <cmath>          
 #include "TaskManager/Event.hpp"      
 #include "TaskManager/TaskManager.h"  
 
@@ -27,14 +26,12 @@ std::shared_ptr<BaseTask> create_hello_world_task(std::shared_ptr<Event> e) {
         std::cout << "Hello, World! \n";
         e->notify();
         };
-    
     return std::make_shared<Task>(task_fn);
 }
 std::shared_ptr<BaseTask> createHelloTask() {
     auto task_fn = []() {
         std::cout << "Hello, World! \n";
         };
-
     return std::make_shared<Task>(task_fn);
 }
 std::shared_ptr<BaseTask> dependency_task() {
@@ -64,23 +61,23 @@ public:
     Int_Task& operator=(const Int_Task& other) = delete;
     virtual ~Int_Task() = default;
     virtual void execute() override {
-        for (size_t i = 0; i < inputData.size() - 1; i++) {
-            auto fn = int_func(inputData[i], inputData[i + 1]);
+        for (size_t i = 0; i < input_data_.size() - 1; i++) {
+            auto fn = int_func(input_data_[i], input_data_[i + 1]);
             int c = fn(5); 
             int res = int_func_2(c);
             std::cout << res << std::endl;
-            outputData.push_back(res);
+            output_data_.push_back(res);
         }
     }
-    virtual void SetData(std::vector<int> dataIn) {
-        inputData = dataIn;
+    virtual void setData(std::vector<int> dataIn) {
+        input_data_ = dataIn;
     }
-    virtual std::vector<int> GetData() {
-        return outputData;
+    virtual std::vector<int> getData() {
+        return output_data_;
     }
 protected:
-    std::vector<int> inputData; 
-    std::vector<int> outputData; 
+    std::vector<int> input_data_; 
+    std::vector<int> output_data_; 
     static std::mutex task_mutex_; 
     std::function<int(int)> taskFn_; 
 };
@@ -118,7 +115,7 @@ int test1() {
     testEvent->subscribe(listener_);
     auto i_task = std::make_shared<Int_Task>(); 
     std::vector<int> intData = { 1, 2, 3, 4 };  
-    i_task->SetData(intData);  
+    i_task->setData(intData);  
     TaskManager::instance().scheduleDelayedTask(delayed_task, 1000);
     auto dep_task = dependency_task();
     std::shared_ptr<std::vector<std::shared_ptr<BaseTask>>> deps = std::make_shared<std::vector<std::shared_ptr<BaseTask>>>();
