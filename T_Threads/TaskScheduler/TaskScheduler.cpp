@@ -35,9 +35,7 @@ void TaskScheduler::processMainThread()
 void TaskScheduler::join() {
     if (!pool_active_) return;
     stop_flag_ = true;
-    for (auto& worker : workers_) {
-        worker->notifyWorker(); // wake up threads
-    }
+    notifyAll();
     for (auto& worker : workers_) {
         worker->join();
     }
@@ -262,9 +260,7 @@ bool TaskScheduler::pushLocal(Task*& task, uint8_t cpuaffinity) {
     else {
         uint8_t chosen = pickNextWorker();
         inboxes_[chosen]->push(task);
-        for (int i = 0; i < workers_.size(); i++) {
-            workers_[i]->notifyWorker();
-        }
+        notifyAll();
     }
     return true;
 }
