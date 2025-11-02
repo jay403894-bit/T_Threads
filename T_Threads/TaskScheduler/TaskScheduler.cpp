@@ -185,8 +185,10 @@ void TaskScheduler::worker(void* data)
             std::pop_heap(self->periodic_heap_.begin(), self->periodic_heap_.end(), PeriodicTaskCompare());
             self->periodic_heap_.pop_back();
      
-            if (periodic->task->stop_flag.load(std::memory_order_acquire))
+            if (periodic->task->stop_flag.load(std::memory_order_acquire)) {
                 periodic->cancelled = true;
+                EpochManager::instance().retirePeriodic(periodic, EpochManager::instance().currentEpoch());
+            }
             // execute and reinsert if still active
             if (periodic->task && !periodic->cancelled) {
                 self->submitLocal(periodic->task); // push to worker queue
