@@ -119,7 +119,7 @@ Windows Only: No pthreads/Linux support yet.
 
 Task Limits: ~32 million tasks in global queues, ~32k per work-stealing queue.
 
-Exceptions: Not handled; throwing exceptions may crash.
+Exceptions: Not really entirely handled, just returns bool values if inputs are invalid
 
 No Dependency Management: Tasks with dependencies must be manually managed.
 
