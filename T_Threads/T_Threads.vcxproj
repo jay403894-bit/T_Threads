@@ -134,29 +134,22 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="TaskManager\Task.cpp" />
-    <ClCompile Include="TaskManager\TaskManager.cpp" />
-    <ClCompile Include="TaskManager\TaskNode.cpp" />
-    <ClCompile Include="TaskManager\TaskScheduler.cpp" />
-    <ClCompile Include="TaskManager\T_Thread.cpp" />
+    <ClCompile Include="TaskScheduler\Epochs.cpp" />
+    <ClCompile Include="TaskScheduler\TaskScheduler.cpp" />
+    <ClCompile Include="TaskScheduler\T_Thread.cpp" />
     <ClCompile Include="Utilities\Clock.cpp" />
-    <ClCompile Include="Utilities\UniqueID.cpp" />
-    <ClCompile Include="Utilities\RandomGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="TaskManager\ChaseLevDeque.h" />
-    <ClInclude Include="TaskManager\Event.hpp" />
-    <ClInclude Include="TaskManager\MPSCQueue.h" />
-    <ClInclude Include="TaskManager\SPSCQueue.h" />
-    <ClInclude Include="TaskManager\Task.h" />
-    <ClInclude Include="TaskManager\TaskManager.h" />
-    <ClInclude Include="TaskManager\TaskNode.h" />
-    <ClInclude Include="TaskManager\TaskQueue.h" />
-    <ClInclude Include="TaskManager\TaskScheduler.h" />
-    <ClInclude Include="TaskManager\T_Thread.h" />
+    <ClInclude Include="TaskScheduler\Epochs.h" />
+    <ClInclude Include="TaskScheduler\MPSCQueue.h" />
+    <ClInclude Include="TaskScheduler\SharedQueues.h" />
+    <ClInclude Include="TaskScheduler\Task.h" />
+    <ClInclude Include="TaskScheduler\TaskDeque.h" />
+    <ClInclude Include="TaskScheduler\TaskScheduler.h" />
+    <ClInclude Include="TaskScheduler\T_Thread.h" />
+    <ClInclude Include="ThirdParty\concurrentqueue.h" />
     <ClInclude Include="Utilities\Clock.h" />
-    <ClInclude Include="Utilities\UniqueID.h" />
-    <ClInclude Include="Utilities\RandomGenerator.h" />
+    <ClInclude Include="Utilities\Exceptions.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

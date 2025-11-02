@@ -13,87 +13,69 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Header Files\TaskManager">
-      <UniqueIdentifier>{70d281a2-641f-424d-965d-83d065fa12b2}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\TaskManager">
-      <UniqueIdentifier>{e890f9c6-3cc2-4095-8d5a-ed956fcf975c}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Header Files\Utilities">
       <UniqueIdentifier>{1bcb3ee3-1b6c-46d6-a486-3520724d0287}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\Utilities">
       <UniqueIdentifier>{ff51fc89-47d0-4198-a7b4-19072a236be2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\TaskScheduler">
+      <UniqueIdentifier>{70d281a2-641f-424d-965d-83d065fa12b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\TaskScheduler">
+      <UniqueIdentifier>{e890f9c6-3cc2-4095-8d5a-ed956fcf975c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\TaskScheduler\ThirdParty">
+      <UniqueIdentifier>{3bd7aebf-f6c0-483f-ad5c-2a0ba0f4cb46}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="TaskManager\T_Thread.cpp">
-      <Filter>Source Files\TaskManager</Filter>
+    <ClCompile Include="TaskScheduler\TaskScheduler.cpp">
+      <Filter>Source Files\TaskScheduler</Filter>
     </ClCompile>
-    <ClCompile Include="TaskManager\TaskScheduler.cpp">
-      <Filter>Source Files\TaskManager</Filter>
+    <ClCompile Include="TaskScheduler\T_Thread.cpp">
+      <Filter>Source Files\TaskScheduler</Filter>
     </ClCompile>
-    <ClCompile Include="TaskManager\TaskManager.cpp">
-      <Filter>Source Files\TaskManager</Filter>
+    <ClCompile Include="TaskScheduler\Epochs.cpp">
+      <Filter>Source Files\TaskScheduler</Filter>
     </ClCompile>
     <ClCompile Include="Utilities\Clock.cpp">
       <Filter>Source Files\Utilities</Filter>
     </ClCompile>
-    <ClCompile Include="Utilities\UniqueID.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
-    <ClCompile Include="Utilities\RandomGenerator.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
-    <ClCompile Include="TaskManager\Task.cpp">
-      <Filter>Source Files\TaskManager</Filter>
-    </ClCompile>
-    <ClCompile Include="TaskManager\TaskNode.cpp">
-      <Filter>Source Files\TaskManager</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="TaskManager\Event.hpp">
-      <Filter>Header Files\TaskManager</Filter>
+    <ClInclude Include="Utilities\Exceptions.h">
+      <Filter>Header Files\Utilities</Filter>
     </ClInclude>
-    <ClInclude Include="TaskManager\T_Thread.h">
-      <Filter>Header Files\TaskManager</Filter>
+    <ClInclude Include="TaskScheduler\MPSCQueue.h">
+      <Filter>Header Files\TaskScheduler</Filter>
     </ClInclude>
-    <ClInclude Include="TaskManager\TaskManager.h">
-      <Filter>Header Files\TaskManager</Filter>
+    <ClInclude Include="TaskScheduler\SharedQueues.h">
+      <Filter>Header Files\TaskScheduler</Filter>
     </ClInclude>
-    <ClInclude Include="TaskManager\TaskScheduler.h">
-      <Filter>Header Files\TaskManager</Filter>
+    <ClInclude Include="TaskScheduler\T_Thread.h">
+      <Filter>Header Files\TaskScheduler</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskScheduler\Task.h">
+      <Filter>Header Files\TaskScheduler</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskScheduler\TaskDeque.h">
+      <Filter>Header Files\TaskScheduler</Filter>
+    </ClInclude>
+    <ClInclude Include="TaskScheduler\TaskScheduler.h">
+      <Filter>Header Files\TaskScheduler</Filter>
+    </ClInclude>
+    <ClInclude Include="ThirdParty\concurrentqueue.h">
+      <Filter>Header Files\TaskScheduler\ThirdParty</Filter>
     </ClInclude>
     <ClInclude Include="Utilities\Clock.h">
       <Filter>Header Files\Utilities</Filter>
     </ClInclude>
-    <ClInclude Include="Utilities\UniqueID.h">
-      <Filter>Header Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="Utilities\RandomGenerator.h">
-      <Filter>Header Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\Task.h">
-      <Filter>Header Files\TaskManager</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\TaskQueue.h">
-      <Filter>Header Files\TaskManager</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\SPSCQueue.h">
-      <Filter>Header Files\TaskManager</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\ChaseLevDeque.h">
-      <Filter>Header Files\TaskManager</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\MPSCQueue.h">
-      <Filter>Header Files\TaskManager</Filter>
-    </ClInclude>
-    <ClInclude Include="TaskManager\TaskNode.h">
-      <Filter>Header Files\TaskManager</Filter>
+    <ClInclude Include="TaskScheduler\Epochs.h">
+      <Filter>Header Files\TaskScheduler</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
