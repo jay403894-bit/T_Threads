@@ -11,17 +11,6 @@
 using T_Threads::Task;
 using T_Threads::TaskScheduler;
 
-
-struct TimedTask {
-    Task* task;          // pointer to the actual task
-    uint64_t execute_at; // timestamp in ms or steady_clock units
-
-    bool operator<(const TimedTask& other) const {
-        // min-heap: earlier times have higher priority
-        return execute_at > other.execute_at;
-    }
-};
-
 void forkedTask(void* data) {
     int ctr=0;
     while (true)
