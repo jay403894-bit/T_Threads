@@ -8,6 +8,7 @@
 #include "TaskScheduler/TaskScheduler.h"  
 #include <assert.h>
 
+using T_Threads::TaskDAG;
 using T_Threads::Task;
 using T_Threads::TaskScheduler;
 
@@ -59,6 +60,20 @@ void hellotask(void* data) {
     auto str = reinterpret_cast<char*>(data);
     std::cout << "Hello " << str << std::endl;
 }
+
+void depA(void* data) {
+    std::cout << "depA\n";
+}
+void depB(void* data) {
+    std::cout << "depB\n";
+}
+void depC(void* data) {
+    std::cout << "depC\n";
+}
+void depD(void* data) {
+    std::cout << "depD\n";
+}
+
 int main() {
     TaskScheduler& scheduler = TaskScheduler::instance();
     
@@ -67,6 +82,7 @@ int main() {
     const int iterations = 10;
     const int tasksPerIteration = 100;
     int ctr = 0;
+
     std::vector<Task*> tasks;
     for (int it = 0; it < iterations; ++it) {
         for (int t = 0; t < tasksPerIteration; ++t) {
@@ -82,6 +98,20 @@ int main() {
         std::this_thread::yield();
     }    
 
+ 
+    std::cout << "Stress test completed." << std::endl;
+    
+    char n[5] = "Josh";
+    Task* hello = new Task(hellotask, static_cast<void*>(&n), true);
+
+    scheduler.submitPeriodic(50.0, hello);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    hello->stop();
+     std::this_thread::sleep_for(std::chrono::milliseconds(300));
+
+    fork();
+    
     for (auto t : tasks) {
         while (!t->complete.load(std::memory_order_acquire)) {
             std::this_thread::yield();
@@ -90,18 +120,6 @@ int main() {
     for (auto t : tasks) {
         delete t;
     }
-    std::cout << "Stress test completed." << std::endl;
-    
-    char n[5] = "Josh";
-    Task* hello = new Task(hellotask, static_cast<void*>(&n), true);
-    
-    scheduler.submitPeriodic("hello",50.0, hello);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    hello->stop();
-     std::this_thread::sleep_for(std::chrono::milliseconds(300));
-
-    fork();
-
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
     return 0;
 }

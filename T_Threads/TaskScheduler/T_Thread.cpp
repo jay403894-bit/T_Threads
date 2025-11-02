@@ -78,14 +78,11 @@ bool T_Thread::allQueuesEmpty() {
 		return false;
 	if (!inboxes_[queue_index_]->empty())
 		return false;
-
 	for (const auto& q : thread_queues_) {
 		if (!q->empty()) {
 			return false;
 		}
 	}
-
-
 	if (priority_queue_[0].size_approx() > 0)
 		return false;
 	if (priority_queue_[1].size_approx() > 0)
@@ -96,9 +93,7 @@ bool T_Thread::allQueuesEmpty() {
 		return false;
 	if (priority_queue_[4].size_approx() > 0)
 		return false;
-
 	return true;
-
 }
 bool T_Thread::ready()
 {
@@ -135,7 +130,7 @@ void T_Thread::worker() {
 			cv_.wait(lock, [this]() {
 				return !running_.load(std::memory_order_acquire)
 					|| immediate_.load(std::memory_order_acquire)
-					|| !allQueuesEmpty();
+					|| (!paused_.load(std::memory_order_acquire) && !allQueuesEmpty());
 				});
 
 			if (!running_.load(std::memory_order_acquire)) break;

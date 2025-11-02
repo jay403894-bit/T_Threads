@@ -14,7 +14,7 @@ TaskScheduler::~TaskScheduler() {
     }
     delete clock_;
 }
-bool TaskScheduler::enqueueToMain(Task*& task)
+bool TaskScheduler::enqueueToMain(Task* task)
 {
     if (!pool_active_) return false;
     if (!task)
@@ -95,37 +95,44 @@ void TaskScheduler::startPool(uint8_t clock_worker_cpu_id) {
     bootstrap(clock_worker_cpu_id, worker_task);
     pool_active_.store(true, std::memory_order_release);
 }
-bool TaskScheduler::submitLocal(Task*& task)
+bool TaskScheduler::submitLocal(Task* task)
 {
     return pushLocal(task);
 }
-bool TaskScheduler::submitLocal(uint8_t cpu_affinity, Task*& task)
+bool TaskScheduler::submitLocal(uint8_t cpu_affinity, Task* task)
 {
    return pushLocal(task, cpu_affinity);
 }
-bool TaskScheduler::submitPQ(Task*& task)
+bool TaskScheduler::submitPQ(Task* task)
 {
    return push(task);
 }
-bool TaskScheduler::submitPQ(uint8_t priority, Task*& task)
+bool TaskScheduler::submitPQ(uint8_t priority, Task* task)
 {
    return push(task, priority);
 }
-bool TaskScheduler::submitFork(size_t cpu_affinity, Task*& task)
+bool TaskScheduler::submitFork(uint8_t cpu_affinity, Task* task)
 {
     if (!task)
         return false;
     return pushToCore(cpu_affinity, task);
 }
 
-bool TaskScheduler::submitPeriodic(std::string id, double ms, Task*& task)
+bool TaskScheduler::submitPeriodic(float ms, Task* task)
 {
-    return pushPeriodic(id, ms, task);
+    return pushPeriodic(ms, task);
 }
 
-bool TaskScheduler::submitDelayed(double ms, Task*& task)
+bool TaskScheduler::submitDelayed(float ms, Task* task)
 {
     return pushDelayed(ms, task);
+}
+void TaskScheduler::pause() {
+    paused_.store(true, std::memory_order_release);
+}
+void TaskScheduler::resume() {
+    paused_.store(false, std::memory_order_release);
+    notifyAll();
 }
 void TaskScheduler::stop() {
     stop_flag_.store(true, std::memory_order_release);
@@ -205,7 +212,7 @@ void TaskScheduler::worker(void* data)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 }
-bool TaskScheduler::pushDelayed(double ms, Task*& task)
+bool TaskScheduler::pushDelayed(float ms, Task* task)
 {
     if (pool_active_.load(std::memory_order_acquire))
     {
@@ -217,18 +224,18 @@ bool TaskScheduler::pushDelayed(double ms, Task*& task)
     }
     return true;
 }
-bool TaskScheduler::pushPeriodic(std::string id, double ms, Task*& task)
+bool TaskScheduler::pushPeriodic(float ms, Task* task)
 {
     if (pool_active_.load(std::memory_order_acquire))
     {
         if (!task)
             return false;
-        PeriodicTask* pt = new PeriodicTask(task, id, ms,clock_);
+        PeriodicTask* pt = new PeriodicTask(task, ms,clock_);
         periodic_inbox_.push(pt);
     }
     return true;
 }
-bool TaskScheduler::pushLocal(Task*& task, uint8_t cpuaffinity) {
+bool TaskScheduler::pushLocal(Task* task, uint8_t cpuaffinity) {
     if (!task)
         return false;
     
@@ -247,7 +254,7 @@ bool TaskScheduler::pushLocal(Task*& task, uint8_t cpuaffinity) {
     }
     return true;
 }
-bool TaskScheduler::push(Task*& task, uint8_t priority)
+bool TaskScheduler::push(Task* task, uint8_t priority)
 {
     //simple guard if less than pin ot priority 0 if greater max at 5
     if (priority > 4)
@@ -264,7 +271,7 @@ bool TaskScheduler::push(Task*& task, uint8_t priority)
     }
     return true;
 }
-bool TaskScheduler::pushToCore(size_t core_id, Task*& task)
+bool TaskScheduler::pushToCore(size_t core_id, Task* task)
 {
     if (!pool_active_) return false;
     if (!task)
@@ -277,7 +284,7 @@ bool TaskScheduler::pushToCore(size_t core_id, Task*& task)
     workers_[core_id-1 % workers_.size()]->setImmediateTask(task);
     return true;
 }
-void TaskScheduler::bootstrap(size_t core_id, Task*& task)
+void TaskScheduler::bootstrap(size_t core_id, Task* task)
 {
     immediate_cores_in_use[core_id-1 % workers_.size()]->store(true, std::memory_order_release);
     workers_[core_id-1 % workers_.size()]->setImmediateTask(task);

@@ -43,7 +43,6 @@ namespace T_Threads {
         //the worker function 
         void worker();
 
-        static std::atomic<int> next_index_;
         std::atomic<int> queue_load_{ 0 };
         std::atomic<bool> immediate_{ false };
         std::atomic<bool> running_{ false };

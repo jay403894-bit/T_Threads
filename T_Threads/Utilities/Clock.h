@@ -14,8 +14,8 @@ namespace T_Threads {
     {
     public:
         Clock();
-        double elapsedMs() const;
-        double elapsed() const;
+        float elapsedMs() const;
+        float elapsed() const;
         std::string toString() const;
 
     private:

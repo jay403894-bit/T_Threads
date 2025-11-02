@@ -26,41 +26,43 @@ namespace T_Threads {
 			return instance;
 		}
 		~TaskScheduler();
-		bool enqueueToMain(Task*& task);
+		bool enqueueToMain(Task* task);
 		void processMainThread();
 		void join();
 		void notifyAll();
 		void startPool(uint8_t clock_worker_cpu_id);
-		bool submitLocal(Task*& task);
-		bool submitLocal(uint8_t cpu_affinity, Task*& task);
-		bool submitPQ(Task*& task);
-		bool submitPQ(uint8_t priority, Task*& task);
-		bool submitFork(size_t cpu_affinity,Task*& task);
-		bool submitPeriodic(std::string id, double ms, Task*& task);
-		bool submitDelayed(double ms, Task*& task);
+		bool submitLocal(Task* task);
+		bool submitLocal(uint8_t cpu_affinity, Task* task);
+		bool submitPQ(Task* task);
+		bool submitPQ(uint8_t priority, Task* task);
+		bool submitFork(uint8_t cpu_affinity, Task* task);
+		bool submitPeriodic(float ms, Task* task);
+		bool submitDelayed(float ms, Task* task);
+		void pause();
+		void resume();
 		void stop();
 		Clock* getClock();
-		template <class F>
+		template <class F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Task*>, int> = 0>
 		void submitLocal(F&& f) {
 			Task* t = new LambdaTask(std::forward<F>(f));
 			pushLocal(t);
 		}
-		template <class F>
+		template <class F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Task*>, int> = 0>
 		void submitLocal(uint8_t cpu_affinity, F&& f) {
 			Task* t = new LambdaTask(std::forward<F>(f));
 			pushLocal(t, cpu_affinity);
 		}
-		template <class F>
+		template <class F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Task*>, int> = 0>
 		void submitPQ(F&& f) {
 			Task* t = new LambdaTask(std::forward<F>(f));
 			push(t);
 		}
-		template <class F>
+		template <class F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Task*>, int> = 0>
 		void submitPQ(uint8_t priority, F&& f) {
 			Task* t = new LambdaTask(std::forward<F>(f));
 			push(t, priority);
 		}
-		template <class F>
+		template <class F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Task*>, int> = 0>
 		void submitFork(size_t coreID, F&& f) {
 			Task* t = new LambdaTask(std::forward<F>(f));
 			pushToCore(coreID, t);
@@ -69,16 +71,16 @@ namespace T_Threads {
 
 	private:
 		static void worker(void* data);
-		bool pushPeriodic(std::string id, double ms, Task*& task);
-		bool pushDelayed(double ms, Task*& task);
-		bool pushLocal(Task*& task, uint8_t cpuaffinity = 0);
-		bool push(Task*& task, uint8_t priority = 3);
-		bool pushToCore(size_t core_id, Task*& task);
-		void bootstrap(size_t core_id, Task*& task);
+		bool pushPeriodic(float ms, Task* task);
+		bool pushDelayed(float ms, Task* task);
+		bool pushLocal(Task* task, uint8_t cpuaffinity = 0);
+		bool push(Task* task, uint8_t priority = 3);
+		bool pushToCore(size_t core_id, Task* task);
+		void bootstrap(size_t core_id, Task* task);
 		TaskScheduler();
 		int pickNextWorker();
-		
-		
+
+
 		Task* worker_task = nullptr;
 		std::vector<DelayedTask*> delayed_heap_;
 		std::vector<PeriodicTask*> periodic_heap_;

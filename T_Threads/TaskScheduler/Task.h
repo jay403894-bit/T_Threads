@@ -4,6 +4,7 @@
 #include "../Utilities/Clock.h"
 
 namespace T_Threads {
+    class TaskDAG;
     struct Task {
         using Func = void(*)(void*);
 
@@ -38,6 +39,15 @@ namespace T_Threads {
         inline void stop() {
             stop_flag.store(true, std::memory_order_release);
         }
+    private:
+        friend class TaskDAG;
+        bool is_local = false;
+        bool is_fork = false;
+        bool is_periodic = false;
+        bool is_delayed = false;
+        float ms = 0.0f;
+        uint8_t cpu_id = 0;
+        uint8_t priority = 0;
     };
     template<typename F>
     class LambdaTask : public Task {
@@ -59,7 +69,6 @@ namespace T_Threads {
     };
     struct PeriodicTask {
         Task* task;
-        std::string id;
         float scheduled_time;
         float interval;
         Clock* clock;
@@ -67,8 +76,8 @@ namespace T_Threads {
         PeriodicTask() : task(nullptr), scheduled_time(0.0f), interval(0.0f), clock(nullptr)
         {
         };
-        PeriodicTask(Task*& task, std::string id, float inter, Clock*& timer)
-            : task(task), id(id), interval(inter), clock(timer) {
+        PeriodicTask(Task*& task, float inter, Clock*& timer)
+            : task(task), interval(inter), clock(timer) {
             scheduled_time = clock->elapsedMs();
             task->auto_delete = false;
         }

@@ -13,6 +13,7 @@ namespace T_Threads {
 
     class SharedQueues {
     public:
+        static inline std::atomic<bool> paused_{ false };
         static inline std::vector<std::unique_ptr<TaskDeque>> thread_queues_;
         static inline std::vector<std::unique_ptr<MPSCQueue<Task*>>> inboxes_;
         static inline std::vector<std::unique_ptr<MPSCQueue<Task*>>> inboxes_local_;

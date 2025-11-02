@@ -13,18 +13,18 @@ void Clock::reset()
 	QueryPerformanceCounter(&start);
 }
 
-double Clock::elapsedMs() const
+float Clock::elapsedMs() const
 {
 	LARGE_INTEGER now;
 	QueryPerformanceCounter(&now);
-	return (now.QuadPart - start.QuadPart) * 1000.0 / static_cast<double>(frequency.QuadPart);
+	return (now.QuadPart - start.QuadPart) * 1000.0 / static_cast<float>(frequency.QuadPart);
 }
 
-double Clock::elapsed() const
+float Clock::elapsed() const
 {
 	LARGE_INTEGER now;
 	QueryPerformanceCounter(&now);
-	return (now.QuadPart - start.QuadPart) / static_cast<double>(frequency.QuadPart);
+	return (now.QuadPart - start.QuadPart) / static_cast<float>(frequency.QuadPart);
 }
 
 // Human-readable time string (HH:MM:SS.MS)
