@@ -127,10 +127,6 @@ bool TaskScheduler::submitDelayed(double ms, Task*& task)
 {
     return pushDelayed(ms, task);
 }
-void TaskScheduler::cancelPeriodic(std::string id)
-{
-    cancel_inbox_.push(id);
-}
 void TaskScheduler::stop() {
     stop_flag_.store(true, std::memory_order_release);
     worker_task->stop();
@@ -188,24 +184,9 @@ void TaskScheduler::worker(void* data)
             // pop the top element
             std::pop_heap(self->periodic_heap_.begin(), self->periodic_heap_.end(), PeriodicTaskCompare());
             self->periodic_heap_.pop_back();
-            while (!self->cancel_inbox_.empty()) {
-                auto t = self->cancel_inbox_.pop();
-                if (!t) break;
-                self->cancelled_list_.push_back(*t);
-            }
-            // check cancelled list
-            for (auto it = self->cancelled_list_.begin(); it != self->cancelled_list_.end(); ) {
-                if (periodic->id == *it) {
-                    periodic->cancelled = true;
-                    it = self->cancelled_list_.erase(it); // remove string from cancelled list
-                    EpochManager::instance().retirePeriodic(periodic, EpochManager::instance().currentEpoch());
-                    break;
-                }
-                else {
-                    ++it;
-                }
-            }
-       
+     
+            if (periodic->task->stop_flag.load(std::memory_order_acquire))
+                periodic->cancelled = true;
             // execute and reinsert if still active
             if (periodic->task && !periodic->cancelled) {
                 self->submitLocal(periodic->task); // push to worker queue

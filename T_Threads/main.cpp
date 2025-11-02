@@ -97,8 +97,9 @@ int main() {
     
     scheduler.submitPeriodic("hello",50.0, hello);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    scheduler.cancelPeriodic("hello");
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    hello->stop();
+     std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
     fork();
 

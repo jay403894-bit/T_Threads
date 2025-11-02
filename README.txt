@@ -80,7 +80,8 @@ bool submitDelayed(double ms, Task*& task);
 
 to cancel a periodic task
 
-void cancelPeriodic(std::string id);
+simply save a reference to the Task* it starts as and run task->stop() this will stop the periodic task
+you can also stop a forked task and get it to rejoin the pool the same way 
 
 
 Main Thread Tasks

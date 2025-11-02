@@ -38,7 +38,6 @@ namespace T_Threads {
 		bool submitFork(size_t cpu_affinity,Task*& task);
 		bool submitPeriodic(std::string id, double ms, Task*& task);
 		bool submitDelayed(double ms, Task*& task);
-		void cancelPeriodic(std::string id);
 		void stop();
 		Clock* getClock();
 		template <class F>
@@ -83,7 +82,6 @@ namespace T_Threads {
 		Task* worker_task = nullptr;
 		std::vector<DelayedTask*> delayed_heap_;
 		std::vector<PeriodicTask*> periodic_heap_;
-		std::vector<std::string> cancelled_list_;
 		Clock* clock_;
 		inline static std::atomic<bool> constructed_{ false };
 		std::atomic<bool> pool_active_{ false };
@@ -95,7 +93,6 @@ namespace T_Threads {
 		MPSCQueue<Task*> main_queue_;
 		MPSCQueue<DelayedTask*> delayed_inbox_;
 		MPSCQueue<PeriodicTask*> periodic_inbox_;
-		MPSCQueue<std::string> cancel_inbox_;
 		std::condition_variable cv_;
 		std::thread worker_thread_;
 		std::mutex pool_mutex_;
